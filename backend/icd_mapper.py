@@ -21,7 +21,7 @@ def match_icd(diagnosis_text: str, icd_codes: List[Tuple[str,str]], top_n=3):
     """
     Return top_n fuzzy ICD matches as list of dicts.
     """
-    if not icd_codes:
+    if not icd_codes or not diagnosis_text.strip():
         return []
     choices = [f"{c} - {d}" for c,d in icd_codes]
     results = process.extract(diagnosis_text, choices, scorer=fuzz.WRatio, limit=top_n)

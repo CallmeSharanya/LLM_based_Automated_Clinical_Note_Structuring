@@ -10,4 +10,6 @@ python-multipart
 rapidfuzz
 google-generativeai
 supabase
-crewai
+pandas
+requests
+streamlit

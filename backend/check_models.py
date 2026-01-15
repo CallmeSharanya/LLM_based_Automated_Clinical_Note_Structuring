@@ -1,0 +1,96 @@
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# Load environment variables
+load_dotenv()
+api_key = os.getenv("GOOGLE_API_KEY")
+
+if not api_key:
+    print("❌ GOOGLE_API_KEY not found in .env!")
+    exit(1)
+
+print(f"✅ Found API Key: {api_key[:5]}...{api_key[-4:]}")
+
+try:
+    genai.configure(api_key=api_key)
+    
+    print("\n🔍 Listing available models for your API Key...")
+    models = genai.list_models()
+    
+    found_any = False
+    print(f"{'Name':<30} | {'Supported Methods'}")
+    print("-" * 60)
+    
+    for m in models:
+        print(f"{m.name:<30} | {m.supported_generation_methods}")
+        found_any = True
+        
+    if not found_any:
+        print("⚠️ No models found! Your API key might not have access to Gemini API.")
+        
+except Exception as e:
+    print(f"\n❌ Error listing models: {e}")
+
+"""✅ Found API Key: AIzaS...j6LA
+
+🔍 Listing available models for your API Key...
+Name                           | Supported Methods
+------------------------------------------------------------
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1768500458.198674   12976 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
+models/embedding-gecko-001     | ['embedText', 'countTextTokens']
+models/gemini-2.5-flash        | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.5-pro          | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-exp    | ['generateContent', 'countTokens', 'bidiGenerateContent']
+models/gemini-2.0-flash        | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-001    | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-exp-image-generation | ['generateContent', 'countTokens', 'bidiGenerateContent']
+models/gemini-2.0-flash-lite-001 | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-lite   | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-lite-preview-02-05 | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.0-flash-lite-preview | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-exp-1206         | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.5-flash-preview-tts | ['countTokens', 'generateContent']        
+models/gemini-2.5-pro-preview-tts | ['countTokens', 'generateContent', 'batchGenerateContent']
+models/gemma-3-1b-it           | ['generateContent', 'countTokens']
+models/gemma-3-4b-it           | ['generateContent', 'countTokens']
+models/gemma-3-12b-it          | ['generateContent', 'countTokens']
+models/gemma-3-27b-it          | ['generateContent', 'countTokens']
+models/gemma-3n-e4b-it         | ['generateContent', 'countTokens']
+models/gemma-3n-e2b-it         | ['generateContent', 'countTokens']
+models/gemini-flash-latest     | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-flash-lite-latest | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-pro-latest       | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.5-flash-lite   | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.5-flash-image-preview | ['generateContent', 'countTokens', 'batchGenerateContent']
+models/gemini-2.5-flash-image  | ['generateContent', 'countTokens', 'batchGenerateContent']
+models/gemini-2.5-flash-preview-09-2025 | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-2.5-flash-lite-preview-09-2025 | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-3-pro-preview    | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-3-flash-preview  | ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+models/gemini-3-pro-image-preview | ['generateContent', 'countTokens', 'batchGenerateContent']
+models/nano-banana-pro-preview | ['generateContent', 'countTokens', 'batchGenerateContent']
+models/gemini-robotics-er-1.5-preview | ['generateContent', 'countTokens']      
+models/gemini-2.5-computer-use-preview-10-2025 | ['generateContent', 'countTokens']
+models/deep-research-pro-preview-12-2025 | ['generateContent', 'countTokens']   
+models/embedding-001           | ['embedContent']
+models/text-embedding-004      | ['embedContent']
+models/gemini-embedding-exp-03-07 | ['embedContent', 'countTextTokens', 'countTokens']
+models/gemini-embedding-exp    | ['embedContent', 'countTextTokens', 'countTokens']
+models/gemini-embedding-001    | ['embedContent', 'countTextTokens', 'countTokens', 'asyncBatchEmbedContent']
+models/aqa                     | ['generateAnswer']
+models/imagen-4.0-generate-preview-06-06 | ['predict']
+models/imagen-4.0-ultra-generate-preview-06-06 | ['predict']
+models/imagen-4.0-generate-001 | ['predict']
+models/imagen-4.0-ultra-generate-001 | ['predict']
+models/imagen-4.0-fast-generate-001 | ['predict']
+models/veo-2.0-generate-001    | ['predictLongRunning']
+models/veo-3.0-generate-001    | ['predictLongRunning']
+models/veo-3.0-fast-generate-001 | ['predictLongRunning']
+models/veo-3.1-generate-preview | ['predictLongRunning']
+models/veo-3.1-fast-generate-preview | ['predictLongRunning']
+models/gemini-2.5-flash-native-audio-latest | ['countTokens', 'bidiGenerateContent']
+models/gemini-2.5-flash-native-audio-preview-09-2025 | ['countTokens', 'bidiGenerateContent']
+models/gemini-2.5-flash-native-audio-preview-12-2025 | ['countTokens', 'bidiGenerateContent']
+"""

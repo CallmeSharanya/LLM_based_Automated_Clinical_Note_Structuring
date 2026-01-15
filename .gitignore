@@ -1,0 +1,16 @@
+# System and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Virtual Environments (Global)
+*venv*/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+
+*.log

@@ -1,0 +1,33 @@
+Patient presents with chief complaint of chest pain for the past 2 days. 
+Pain is described as sharp, localized to the left side, 6/10 severity, 
+worsens with deep breathing. No radiation to arm or jaw. 
+Patient reports associated shortness of breath and mild cough.
+Past medical history includes hypertension diagnosed 5 years ago, 
+currently on Amlodipine 5mg daily. No known drug allergies.
+Family history positive for coronary artery disease (father had MI at age 55).
+
+Physical examination: 
+- Vitals: BP 145/92 mmHg, HR 88 bpm, RR 20/min, Temp 98.6°F, SpO2 97% on room air
+- General: Alert, oriented, in mild distress
+- Cardiovascular: Regular rhythm, no murmurs, rubs, or gallops
+- Respiratory: Decreased breath sounds at left base, mild crackles
+- Chest wall: Tenderness on palpation over left 5th-6th intercostal space
+
+Labs ordered:
+- Troponin: <0.01 ng/mL (normal)
+- CBC: WBC 11,200, Hgb 14.2, Plt 245
+- BMP: Na 140, K 4.2, Cr 0.9, BUN 15
+
+Chest X-ray: No acute infiltrates, mild cardiomegaly noted.
+
+Assessment: 
+1. Costochondritis - most likely given reproducible chest wall tenderness
+2. Rule out pleuritis
+3. Hypertension - suboptimally controlled
+
+Plan:
+1. Ibuprofen 400mg TID x 7 days for pain
+2. Continue Amlodipine, consider uptitration if BP remains elevated
+3. Patient education on warning signs of cardiac events
+4. Follow-up in 1 week
+5. Consider adding lisinopril if BP not controlled

@@ -1,0 +1,29 @@
+Patient: 5-year-old male
+CC: Ear pain and fever
+HPI: Mother reports patient woke up crying at 2 AM complaining of right ear pain. 
+Had runny nose and cough for 3 days prior. Fevers up to 102°F at home, treated with Tylenol.
+Decreased appetite, good fluid intake. No vomiting or diarrhea.
+PMH: Recurrent otitis media (3 episodes in last year). No surgeries.
+Allergies: Penicillin (hives)
+
+Physical Exam:
+VS: Temp 101.5°F, HR 110, RR 24, SpO2 99%
+Gen: Alert, fussy but consolable
+HEENT: 
+- Right TM: Erythematous, bulging, poor mobility, purulent effusion visible
+- Left TM: Clear, good light reflex
+- Oropharynx: Mild erythema, no exudates
+- Neck: Small anterior cervical lymph nodes palpable
+Lungs: Clear to auscultation bilaterally
+
+Assessment:
+1. Acute Otitis Media, Right Suppurative - recurrent
+2. Upper Respiratory Infection
+3. Penicillin Allergy
+
+Plan:
+1. Cefdinir 14mg/kg/day PO x 10 days (due to PCN allergy)
+2. Acetaminophen/Ibuprofen for pain/fever control
+3. Encourage hydration
+4. Return precautions: persistent fever > 48hrs, lethargy, worsening pain
+5. Referral to ENT if one more episode within 6 months

@@ -1,0 +1,39 @@
+Emergency Department Note
+
+Patient: 68 yo male brought in by EMS for acute onset confusion and left-sided weakness.
+
+History (per wife): Patient was watching TV at ~2:30 PM when wife noticed 
+he suddenly could not move his left arm. Speech became slurred. 
+No fall or head trauma. 
+Last known well: 2:30 PM (approximately 45 minutes ago)
+PMH: Atrial fibrillation (not on anticoagulation - patient refused), 
+HTN, hyperlipidemia, prior TIA 2 years ago.
+Medications: Aspirin 81mg, metoprolol 50mg BID, simvastatin 40mg
+
+Physical Exam:
+VS: BP 178/95, HR 92 irregular, RR 18, Temp 98.0, O2 sat 96% RA
+Neuro: 
+- GCS 14 (E4V4M6)
+- Left facial droop
+- Left arm plegic, leg 3/5 strength
+- Dysarthria present
+- NIHSS: 12
+
+CT Head (3:20 PM): No hemorrhage, no early ischemic changes
+CT Angiography: Right MCA M1 occlusion
+
+Assessment:
+1. Acute ischemic stroke - right MCA territory, NIHSS 12
+2. Large vessel occlusion - right M1
+3. Atrial fibrillation - likely cardioembolic source
+
+Plan:
+1. tPA administration - within window, no contraindications
+   - Alteplase 0.9 mg/kg IV, 10% bolus, remainder over 60 min
+2. Interventional neurology consulted for mechanical thrombectomy
+3. Admit to Neuro ICU
+4. BP management - permissive HTN, goal <180/105 during tPA
+5. NPO, aspiration precautions
+6. Repeat CT head in 24 hours
+7. Start anticoagulation after 24 hours if no hemorrhagic conversion
+8. PT/OT/Speech therapy consults

@@ -1,0 +1,43 @@
+CC: 45-year-old female presents for diabetes follow-up.
+
+HPI: Patient diagnosed with Type 2 Diabetes Mellitus 3 years ago. 
+Reports increased thirst and frequent urination over past month.
+Checking blood glucose at home - fasting readings 180-220 mg/dL.
+Admits to poor dietary compliance during holiday season.
+Denies blurry vision, numbness/tingling in extremities, or foot wounds.
+
+Medications:
+- Metformin 1000mg BID
+- Lisinopril 10mg daily for HTN
+- Atorvastatin 20mg daily
+
+Allergies: Sulfa drugs - causes rash
+
+Social Hx: Non-smoker, occasional alcohol, sedentary lifestyle
+
+Exam:
+VS: BP 128/78, HR 76, Weight 185 lbs (up 5 lbs from last visit)
+Gen: Obese female, no acute distress
+HEENT: PERRLA, no retinopathy on fundoscopic exam
+Ext: No edema, intact sensation bilateral feet, dorsalis pedis pulses 2+
+Skin: No lesions, no acanthosis nigricans
+
+Labs (drawn today):
+- HbA1c: 8.9% (previous was 7.2%)
+- Fasting glucose: 195 mg/dL
+- Creatinine: 0.8, eGFR >90
+- Lipid panel: TC 210, LDL 130, HDL 42, TG 188
+
+Assessment:
+1. Type 2 Diabetes Mellitus - poorly controlled, worsening HbA1c
+2. Obesity - BMI 32
+3. Dyslipidemia - LDL not at goal
+
+Plan:
+1. Add Glipizide 5mg daily before breakfast
+2. Increase Atorvastatin to 40mg daily
+3. Dietitian referral for medical nutrition therapy
+4. Patient to increase physical activity - goal 150 min/week
+5. Recheck HbA1c and lipids in 3 months
+6. Discussed SGLT2 inhibitor option if no improvement
+7. RTC 3 months or sooner if symptoms worsen
