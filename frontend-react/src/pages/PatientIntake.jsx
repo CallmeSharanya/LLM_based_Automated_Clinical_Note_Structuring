@@ -32,8 +32,14 @@ export default function PatientIntake() {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
 
+    // Prevent double initialization (React StrictMode)
+    const initializedRef = useRef(false);
+
     useEffect(() => {
-        startSession();
+        if (!initializedRef.current) {
+            initializedRef.current = true;
+            startSession();
+        }
     }, []);
 
     useEffect(() => {
@@ -44,17 +50,20 @@ export default function PatientIntake() {
         try {
             const response = await intakeAPI.startSession(user?.id);
             setSessionId(response.session_id);
-            addAssistantMessage(
-                isEmergency
-                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let me help you quickly.\n\n**What brings you in today? What's your main health concern?**`
-                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms to help connect you with the right specialist.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
-            );
+            // Use backend greeting if provided, otherwise use default
+            if (response.message) {
+                addAssistantMessage(response.message);
+            } else {
+                addAssistantMessage(
+                    isEmergency
+                        ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let me help you quickly.\n\n**What brings you in today? What's your main health concern?**`
+                        : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
+                );
+            }
         } catch (error) {
             setSessionId(`session-${Date.now()}`);
             addAssistantMessage(
-                isEmergency
-                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let me help you quickly.\n\n**What brings you in today? What's your main health concern?**`
-                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
+                `Hello! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
             );
         }
     };
