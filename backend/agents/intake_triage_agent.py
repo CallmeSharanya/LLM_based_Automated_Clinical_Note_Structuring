@@ -10,11 +10,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-import google.generativeai as genai
 import os
+from groq import Groq
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Configure Groq client
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 class TriagePriority(Enum):
@@ -71,8 +71,8 @@ class IntakeTriageAgent:
         "worst headache", "sudden weakness", "vision loss", "facial droop"
     ]
     
-    def __init__(self, model: str = "gemini-2.0-flash"):
-        self.model = genai.GenerativeModel(model)
+    def __init__(self, model: str = "llama-3.3-70b-versatile"):
+        self.model = model
         self.sessions: Dict[str, IntakeSession] = {}
     
     def create_session(self, session_id: str, patient_id: Optional[str] = None) -> IntakeSession:
@@ -91,10 +91,18 @@ class IntakeTriageAgent:
         return any(flag in text_lower for flag in self.RED_FLAG_KEYWORDS)
     
     def _generate_response(self, prompt: str) -> str:
-        """Generate response using Gemini"""
+        """Generate response using Groq"""
         try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
+            response = groq_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful healthcare intake assistant. Always respond with valid JSON when asked."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"Error generating response: {e}")
             return "I'm having trouble processing that. Could you please try again?"
@@ -111,7 +119,7 @@ To get started, could you please tell me:
     def process_message(self, session_id: str, user_message: str) -> Dict[str, Any]:
         """
         Process a user message and return the next response.
-        Returns the response, updated session state, and any flags.
+        Uses dynamic LLM-driven questioning based on conversation context.
         """
         session = self.sessions.get(session_id)
         if not session:
@@ -119,6 +127,23 @@ To get started, could you please tell me:
                 "error": "Session not found",
                 "response": "Session expired. Please start a new conversation."
             }
+        
+        # Initialize turn tracking if not exists
+        if not hasattr(session, 'turn_count'):
+            session.turn_count = 0
+            session.max_turns = 8
+            session.collected_info = {
+                "chief_complaint": None,
+                "location": None,
+                "duration": None,
+                "severity": None,
+                "associated_symptoms": None,
+                "medical_history": None,
+                "medications_allergies": None
+            }
+        
+        # Increment turn count
+        session.turn_count += 1
         
         # Add user message to history
         session.conversation_history.append({
@@ -135,8 +160,17 @@ To get started, could you please tell me:
             emergency_response = self._handle_emergency(session, user_message)
             return emergency_response
         
-        # Process based on current stage
-        response_data = self._process_stage(session, user_message)
+        # Extract information from the current message
+        self._extract_information(session, user_message)
+        
+        # Check if we should complete the intake
+        should_complete = self._should_complete_intake(session)
+        
+        if should_complete or session.turn_count >= session.max_turns:
+            response_data = self._complete_intake_dynamic(session)
+        else:
+            # Generate dynamic follow-up question
+            response_data = self._generate_dynamic_question(session)
         
         # Add assistant response to history
         session.conversation_history.append({
@@ -146,6 +180,176 @@ To get started, could you please tell me:
         })
         
         return response_data
+    
+    def _extract_information(self, session: IntakeSession, user_message: str) -> None:
+        """Extract and categorize information from user message"""
+        
+        conversation_context = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}"
+            for msg in session.conversation_history[-6:]
+        ])
+        
+        extract_prompt = f"""Analyze this patient message and extract health information.
+
+CONVERSATION:
+{conversation_context}
+
+CURRENT MESSAGE: "{user_message}"
+
+Extract and return as JSON:
+{{
+    "chief_complaint": "main symptom if mentioned, or null",
+    "location": "body location if specified, or null",
+    "duration": "how long symptoms present, or null",
+    "severity": "severity 1-10 or description, or null",
+    "associated_symptoms": ["list of additional symptoms"],
+    "medical_history": "conditions mentioned, or null",
+    "medications_allergies": "medications/allergies, or null"
+}}
+
+Return ONLY valid JSON."""
+
+        result = self._generate_response(extract_prompt)
+        
+        try:
+            parsed = json.loads(result.replace("```json", "").replace("```", "").strip())
+            
+            # Update collected info with non-null values
+            for key, value in parsed.items():
+                if value is not None and key in session.collected_info:
+                    if key == "associated_symptoms" and isinstance(value, list):
+                        existing = session.collected_info.get(key) or []
+                        session.collected_info[key] = list(set(existing + value))
+                    else:
+                        session.collected_info[key] = value
+                        
+            # Also update symptom_details
+            if parsed.get("chief_complaint"):
+                session.symptom_details["chief_complaint"] = parsed["chief_complaint"]
+                session.symptoms = [parsed["chief_complaint"]]
+            if parsed.get("duration"):
+                session.symptom_details["duration"] = parsed["duration"]
+            if parsed.get("severity"):
+                session.symptom_details["severity"] = parsed["severity"]
+                
+        except Exception as e:
+            print(f"Error extracting information: {e}")
+
+    def _should_complete_intake(self, session: IntakeSession) -> bool:
+        """Determine if enough information has been collected"""
+        collected = session.collected_info
+        
+        has_chief_complaint = collected.get("chief_complaint") is not None
+        has_duration = collected.get("duration") is not None
+        has_severity = collected.get("severity") is not None
+        
+        min_turns_reached = session.turn_count >= 3
+        basic_info_complete = has_chief_complaint and (has_duration or has_severity)
+        has_additional = collected.get("associated_symptoms") or collected.get("medical_history")
+        
+        if min_turns_reached and basic_info_complete and (has_additional or session.turn_count >= 5):
+            return True
+        return False
+    
+    def _generate_dynamic_question(self, session: IntakeSession) -> Dict[str, Any]:
+        """Generate contextual follow-up question based on conversation"""
+        
+        conversation_context = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}"
+            for msg in session.conversation_history
+        ])
+        
+        collected = session.collected_info
+        
+        prompt = f"""You are a compassionate healthcare intake assistant. Based on the conversation, generate the NEXT most relevant question.
+
+CONVERSATION:
+{conversation_context}
+
+INFORMATION COLLECTED:
+- Chief complaint: {collected.get('chief_complaint') or 'Unknown'}
+- Location: {collected.get('location') or 'Unknown'}
+- Duration: {collected.get('duration') or 'Unknown'}
+- Severity: {collected.get('severity') or 'Unknown'}
+- Associated symptoms: {collected.get('associated_symptoms') or 'Unknown'}
+- Medical history: {collected.get('medical_history') or 'Unknown'}
+
+TURN: {session.turn_count} of {session.max_turns}
+
+RULES:
+1. Ask ONE focused question about missing information
+2. Be empathetic and warm
+3. Briefly acknowledge what patient shared
+4. Keep response to 2-3 sentences max
+5. Use simple language, no medical jargon
+
+Return JSON:
+{{"response": "Your empathetic response with follow-up question"}}"""
+
+        result = self._generate_response(prompt)
+        
+        try:
+            parsed = json.loads(result.replace("```json", "").replace("```", "").strip())
+            response = parsed.get("response", "Could you tell me more about your symptoms?")
+        except:
+            response = "Thank you for sharing that. Could you tell me more about your symptoms?"
+        
+        return {
+            "response": response,
+            "stage": "active",
+            "turn_count": session.turn_count,
+            "max_turns": session.max_turns,
+            "collected_info": session.collected_info
+        }
+    
+    def _complete_intake_dynamic(self, session: IntakeSession) -> Dict[str, Any]:
+        """Complete intake with dynamic data and generate SOAP"""
+        session.current_stage = "complete"
+        
+        # Generate triage
+        triage_result = self._generate_triage(session)
+        session.triage_priority = TriagePriority(triage_result["priority"])
+        session.triage_score = triage_result["score"]
+        session.suggested_specialties = triage_result["specialties"]
+        
+        # Generate preliminary SOAP
+        soap_result = self._generate_preliminary_soap(session)
+        session.preliminary_soap = soap_result
+        
+        collected = session.collected_info
+        chief = collected.get("chief_complaint") or "Symptoms described"
+        duration = collected.get("duration") or "Not specified"
+        severity = collected.get("severity") or "Not specified"
+        
+        priority_emoji = {"red": "🔴", "orange": "🟠", "yellow": "🟡", "green": "🟢"}
+        p = triage_result["priority"]
+        
+        response = f"""✅ **Thank you for completing the intake!**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 **Summary:**
+• **Main concern:** {chief}
+• **Duration:** {duration}
+• **Severity:** {severity}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{priority_emoji[p]} **Triage:** {p.title()}
+🏥 **Specialty:** {session.suggested_specialties[0] if session.suggested_specialties else 'General Medicine'}
+
+Type **"Yes"** to find available doctors."""
+
+        return {
+            "response": response,
+            "stage": "complete",
+            "triage": triage_result,
+            "preliminary_soap": soap_result,
+            "session_complete": True,
+            "suggested_specialties": session.suggested_specialties,
+            "turn_count": session.turn_count,
+            "max_turns": session.max_turns
+        }
     
     def _handle_emergency(self, session: IntakeSession, user_message: str) -> Dict[str, Any]:
         """Handle emergency/red flag situations"""
