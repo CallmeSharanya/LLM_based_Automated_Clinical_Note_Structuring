@@ -16,6 +16,7 @@ import json
 import traceback
 from datetime import datetime
 import uuid
+import tempfile
 
 # Import utilities
 from ocr_utils import extract_text_from_bytes

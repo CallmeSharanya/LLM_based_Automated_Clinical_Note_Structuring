@@ -23,23 +23,14 @@ export default function PatientIntake() {
     const [showDoctors, setShowDoctors] = useState(false);
     const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
-    // Track collected symptoms data
-    const [collectedData, setCollectedData] = useState({
-        mainConcern: '',
-        duration: '',
-        severity: '',
-        additionalSymptoms: '',
-        medicalHistory: '',
-    });
-    const [currentStep, setCurrentStep] = useState(0);
+    // Dynamic chat tracking
+    const [turnCount, setTurnCount] = useState(0);
+    const [maxTurns, setMaxTurns] = useState(8);
+    const [soapNote, setSoapNote] = useState(null);
 
-    const questions = [
-        { key: 'mainConcern', question: 'What is your main health concern today?', placeholder: 'e.g., I have a severe headache that started this morning' },
-        { key: 'duration', question: 'How long have you been experiencing this?', placeholder: 'e.g., 2 days, since yesterday, for a week' },
-        { key: 'severity', question: 'On a scale of 1-10, how severe is it?', placeholder: 'e.g., 7 out of 10' },
-        { key: 'additionalSymptoms', question: 'Are you experiencing any other symptoms?', placeholder: 'e.g., fever, nausea, fatigue, dizziness' },
-        { key: 'medicalHistory', question: 'Do you have any allergies or ongoing medical conditions?', placeholder: 'e.g., diabetes, allergic to penicillin, high blood pressure' },
-    ];
+    // Voice recording state (using Web Speech API)
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
     useEffect(() => {
         startSession();
@@ -55,15 +46,15 @@ export default function PatientIntake() {
             setSessionId(response.session_id);
             addAssistantMessage(
                 isEmergency
-                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let's quickly gather your symptoms.\n\n${questions[0].question}`
-                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll help understand your symptoms and connect you with the right specialist.\n\n${questions[0].question}`
+                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let me help you quickly.\n\n**What brings you in today? What's your main health concern?**`
+                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms to help connect you with the right specialist.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
             );
         } catch (error) {
             setSessionId(`session-${Date.now()}`);
             addAssistantMessage(
                 isEmergency
-                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let's quickly gather your symptoms.\n\n${questions[0].question}`
-                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll help understand your symptoms and connect you with the right specialist.\n\n${questions[0].question}`
+                    ? `🚨 Emergency Mode Active\n\nI understand this is urgent. Let me help you quickly.\n\n**What brings you in today? What's your main health concern?**`
+                    : `Hello${user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋\n\nI'm your AI health assistant. I'll ask you some questions about your symptoms.\n\n🎤 **You can type or use the microphone button to speak your symptoms.**\n\n**What brings you in today? What's your main health concern?**`
             );
         }
     };
@@ -76,156 +67,126 @@ export default function PatientIntake() {
         }]);
     };
 
-    const sendMessage = async () => {
-        if (!inputMessage.trim() || loading) return;
+    // Voice Recognition using Web Speech API (works in Chrome, Edge)
+    const recognitionRef = useRef(null);
+
+    const startRecording = () => {
+        // Check if Web Speech API is supported
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            alert('Voice recognition is not supported in your browser. Please use Chrome or Edge.');
+            return;
+        }
+
+        try {
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = true;
+            recognitionRef.current.lang = 'en-US';
+
+            recognitionRef.current.onstart = () => {
+                setIsRecording(true);
+                setIsTranscribing(false);
+            };
+
+            recognitionRef.current.onresult = (event) => {
+                let transcript = '';
+                for (let i = 0; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript;
+                }
+                setInputMessage(transcript);
+            };
+
+            recognitionRef.current.onend = () => {
+                setIsRecording(false);
+                // Auto-send if we have text
+                if (inputMessage.trim()) {
+                    setTimeout(() => {
+                        sendMessageWithText(inputMessage);
+                    }, 300);
+                }
+            };
+
+            recognitionRef.current.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                setIsRecording(false);
+                if (event.error === 'not-allowed') {
+                    alert('Microphone access denied. Please allow microphone permissions.');
+                }
+            };
+
+            recognitionRef.current.start();
+        } catch (error) {
+            console.error('Error starting speech recognition:', error);
+            alert('Could not start voice recognition. Please try again.');
+        }
+    };
+
+    const stopRecording = () => {
+        if (recognitionRef.current && isRecording) {
+            recognitionRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const sendMessageWithText = async (text) => {
+        if (!text.trim() || loading) return;
 
         const userMessage = {
             role: 'user',
-            content: inputMessage,
+            content: text,
             timestamp: new Date().toISOString(),
         };
         setMessages(prev => [...prev, userMessage]);
-
-        // Store the answer
-        const currentQuestion = questions[currentStep];
-        if (currentQuestion) {
-            setCollectedData(prev => ({
-                ...prev,
-                [currentQuestion.key]: inputMessage
-            }));
-        }
-
         setInputMessage('');
         setLoading(true);
 
-        // Simulate typing delay for more natural feel
-        await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 400));
-
         try {
-            const response = await intakeAPI.sendMessage(sessionId, inputMessage, user?.id);
+            const response = await intakeAPI.sendMessage(sessionId, text, user?.id);
+
+            if (response.turn_count) setTurnCount(response.turn_count);
+            if (response.max_turns) setMaxTurns(response.max_turns);
 
             if (response.session_complete) {
                 handleSessionComplete(response);
+            } else if (response.is_emergency) {
+                addAssistantMessage(response.message);
+                setTriageResult({ priority: 'red', score: 10 });
             } else {
-                handleNextStep(inputMessage);
+                addAssistantMessage(response.message);
             }
         } catch (error) {
-            handleNextStep(inputMessage);
+            addAssistantMessage('I apologize, I had trouble processing that. Could you please try again?');
         } finally {
             setLoading(false);
             inputRef.current?.focus();
         }
     };
 
-    const handleNextStep = (userInput) => {
-        const nextStep = currentStep + 1;
+    const sendMessage = () => sendMessageWithText(inputMessage);
 
-        if (nextStep >= questions.length) {
-            // All questions answered - generate summary
-            const finalData = {
-                ...collectedData,
-                [questions[currentStep].key]: userInput
-            };
-            generateSummary(finalData);
-        } else {
-            // Ask next question with a contextual acknowledgment
-            const acknowledgments = [
-                'Got it, thank you.',
-                'Understood.',
-                'Thanks for sharing that.',
-                'Noted.',
-                'I see.',
-            ];
-            const ack = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
-            addAssistantMessage(`${ack}\n\n${questions[nextStep].question}`);
-            setCurrentStep(nextStep);
-        }
-    };
-
-    const generateSummary = (data) => {
-        // Determine triage based on severity and symptoms
-        let priority = 'green';
-        let score = 3;
-        const severityNum = parseInt(data.severity) || 5;
-        const mainConcern = data.mainConcern.toLowerCase();
-
-        // Emergency keywords
-        const emergencyKeywords = ['chest pain', 'breathing', 'unconscious', 'bleeding heavily', 'stroke', 'heart'];
-        const urgentKeywords = ['severe', 'high fever', 'vomiting blood', 'sharp pain', 'accident'];
-
-        if (emergencyKeywords.some(k => mainConcern.includes(k)) || severityNum >= 9) {
-            priority = 'red';
-            score = 9;
-        } else if (urgentKeywords.some(k => mainConcern.includes(k)) || severityNum >= 7) {
-            priority = 'orange';
-            score = 7;
-        } else if (severityNum >= 5) {
-            priority = 'yellow';
-            score = 5;
+    const handleSessionComplete = (response) => {
+        if (response.triage) {
+            setTriageResult({
+                priority: response.triage.priority,
+                score: response.triage.score,
+                specialty: response.suggested_specialties?.[0] || 'General Medicine'
+            });
         }
 
-        // Determine specialty
-        let specialty = 'General Medicine';
-        if (mainConcern.includes('heart') || mainConcern.includes('chest') || mainConcern.includes('blood pressure')) {
-            specialty = 'Cardiology';
-        } else if (mainConcern.includes('stomach') || mainConcern.includes('digest') || mainConcern.includes('nausea')) {
-            specialty = 'Gastroenterology';
-        } else if (mainConcern.includes('bone') || mainConcern.includes('joint') || mainConcern.includes('back')) {
-            specialty = 'Orthopedics';
-        } else if (mainConcern.includes('skin') || mainConcern.includes('rash') || mainConcern.includes('itch')) {
-            specialty = 'Dermatology';
-        } else if (mainConcern.includes('headache') || mainConcern.includes('migraine') || mainConcern.includes('dizz')) {
-            specialty = 'Neurology';
+        if (response.preliminary_soap) {
+            setSoapNote(response.preliminary_soap);
         }
 
-        const triageLabels = {
-            red: { label: 'Emergency', sublabel: 'Immediate attention required', icon: '🔴' },
-            orange: { label: 'Urgent', sublabel: 'Priority appointment recommended', icon: '🟠' },
-            yellow: { label: 'Semi-Urgent', sublabel: 'Same-day appointment recommended', icon: '🟡' },
-            green: { label: 'Routine', sublabel: 'Standard appointment', icon: '🟢' },
-        };
-
-        const triage = triageLabels[priority];
-
-        setTriageResult({ priority, score, specialty });
         setSessionComplete(true);
-
-        // Create a comprehensive summary with user's actual answers
-        const summary = `✅ Assessment Complete
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 **Your Symptoms Summary**
-
-• **Main Concern:** ${data.mainConcern}
-• **Duration:** ${data.duration || 'Not specified'}
-• **Severity:** ${data.severity || 'Not specified'}/10
-• **Additional Symptoms:** ${data.additionalSymptoms || 'None reported'}
-• **Medical History/Allergies:** ${data.medicalHistory || 'None reported'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${triage.icon} **Triage Assessment:** ${triage.label}
-${triage.sublabel}
-
-🏥 **Recommended Specialty:** ${specialty}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**What happens next:**
-1. We'll match you with available ${specialty} specialists
-2. You can select a doctor and appointment time
-3. Your assessment will be shared with the doctor beforehand
-
-Type **"Yes"** to find available doctors or **"No"** to add more information.`;
-
-        addAssistantMessage(summary);
+        addAssistantMessage(response.message);
     };
 
     const handleUserConfirmation = () => {
         if (!inputMessage.trim() || loading) return;
 
-        const response = inputMessage.toLowerCase().trim();
+        const userResponse = inputMessage.toLowerCase().trim();
 
         setMessages(prev => [...prev, {
             role: 'user',
@@ -234,14 +195,13 @@ Type **"Yes"** to find available doctors or **"No"** to add more information.`;
         }]);
         setInputMessage('');
 
-        if (response === 'yes' || response === 'y' || response.includes('yes')) {
+        if (userResponse === 'yes' || userResponse === 'y' || userResponse.includes('yes')) {
             setShowDoctors(true);
             matchDoctors(triageResult?.specialty || 'General Medicine', triageResult?.priority);
             addAssistantMessage('Finding the best available doctors for you...');
         } else {
-            addAssistantMessage('No problem! What additional information would you like to add about your symptoms?');
+            addAssistantMessage('No problem! Please share any additional information about your symptoms.');
             setSessionComplete(false);
-            setCurrentStep(questions.length);
         }
     };
 
@@ -285,20 +245,6 @@ Type **"Yes"** to find available doctors or **"No"** to add more information.`;
                     languages: ['English', 'Hindi'],
                     nextAvailable: '4:00 PM Today',
                     hospital: 'Manipal Hospital',
-                },
-                {
-                    id: 'doc-003',
-                    name: 'Dr. Priya Sharma',
-                    specialty: 'Cardiology',
-                    subspecialty: 'Interventional Cardiology',
-                    rating: 4.8,
-                    reviews: 412,
-                    experience_years: 15,
-                    available_slots: ['Tomorrow, 11:00 AM', 'Tomorrow, 3:30 PM', 'Wed, 10:00 AM', 'Wed, 2:00 PM'],
-                    consultation_fee: 1200,
-                    languages: ['English', 'Hindi', 'Telugu'],
-                    nextAvailable: '11:00 AM Tomorrow',
-                    hospital: 'Fortis Hospital',
                 },
             ]);
         } finally {
@@ -389,10 +335,10 @@ Redirecting to your dashboard...`);
                             </button>
                             <div>
                                 <h1 className={`text-lg font-semibold ${isEmergency ? 'text-white' : 'text-gray-900'}`}>
-                                    {isEmergency ? '🚨 Emergency Assessment' : 'AI Health Assessment'}
+                                    {isEmergency ? '🚨 Emergency Assessment' : 'AI Health Assistant'}
                                 </h1>
                                 <p className={`text-sm ${isEmergency ? 'text-white/70' : 'text-gray-500'}`}>
-                                    {sessionComplete ? 'Assessment Complete' : `Step ${currentStep + 1} of ${questions.length}`}
+                                    {sessionComplete ? 'Assessment Complete' : turnCount > 0 ? `Turn ${turnCount} of ~${maxTurns}` : 'Starting conversation...'}
                                 </p>
                             </div>
                         </div>
@@ -402,12 +348,12 @@ Redirecting to your dashboard...`);
                             </div>
                         )}
                     </div>
-                    {!sessionComplete && (
+                    {!sessionComplete && turnCount > 0 && (
                         <div className="mt-4">
                             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
-                                    style={{ width: `${((currentStep + 1) / questions.length) * 100}%` }}
+                                    style={{ width: `${Math.min((turnCount / maxTurns) * 100, 100)}%` }}
                                 />
                             </div>
                         </div>
@@ -450,16 +396,17 @@ Redirecting to your dashboard...`);
                             </div>
                         ))}
 
-                        {loading && (
+                        {(loading || isTranscribing) && (
                             <div className="flex justify-start animate-fadeIn">
                                 <div className="flex-shrink-0 w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-lg mr-3">
                                     🤖
                                 </div>
                                 <div className="bg-white rounded-2xl rounded-bl-md px-5 py-4 shadow-lg shadow-gray-200/50 border border-gray-100">
-                                    <div className="flex gap-1.5">
+                                    <div className="flex gap-1.5 items-center">
                                         <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce"></span>
                                         <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
                                         <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                                        {isTranscribing && <span className="ml-2 text-sm text-gray-500">Transcribing...</span>}
                                     </div>
                                 </div>
                             </div>
@@ -488,10 +435,6 @@ Redirecting to your dashboard...`);
                                     <div
                                         key={doc.id}
                                         onClick={() => {
-                                            if (selectedDoctor?.id === doc.id) {
-                                                // Don't deselect, just keep it selected
-                                                return;
-                                            }
                                             setSelectedDoctor(doc);
                                             setSelectedSlot(null);
                                         }}
@@ -565,7 +508,6 @@ Redirecting to your dashboard...`);
                                                                 key={idx}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    e.preventDefault();
                                                                     setSelectedSlot(slot);
                                                                 }}
                                                                 className={`px-4 py-3.5 text-sm font-semibold rounded-xl border-2 transition-all duration-200 ${selectedSlot === slot
@@ -633,18 +575,6 @@ Redirecting to your dashboard...`);
                                             </>
                                         )}
                                     </button>
-                                    <p className="text-center text-gray-500 text-sm mt-4 flex items-center justify-center gap-4">
-                                        <span className="flex items-center gap-1.5">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                            </svg>
-                                            Secure Booking
-                                        </span>
-                                        <span>•</span>
-                                        <span>Assessment shared with doctor</span>
-                                        <span>•</span>
-                                        <span>Pay at clinic</span>
-                                    </p>
                                 </div>
                             )}
                         </div>
@@ -652,16 +582,39 @@ Redirecting to your dashboard...`);
                 </div>
             </div>
 
-            {/* Premium Input Area */}
+            {/* Premium Input Area with Voice Button */}
             {!showDoctors && (
                 <div className="sticky bottom-0 bg-white/80 backdrop-blur-xl border-t border-gray-200/50 px-6 py-4 shadow-lg">
                     <div className="max-w-4xl mx-auto">
-                        {!sessionComplete && currentStep < questions.length && (
+                        {!sessionComplete && (
                             <p className="text-xs text-gray-400 mb-2 ml-1">
-                                💡 {questions[currentStep]?.placeholder}
+                                💡 Share details about your symptoms - type or use 🎤 to speak
                             </p>
                         )}
                         <div className="flex gap-3">
+                            {/* Microphone Button */}
+                            <button
+                                onClick={isRecording ? stopRecording : startRecording}
+                                disabled={loading || isTranscribing}
+                                className={`px-4 py-4 rounded-2xl transition-all duration-200 ${isRecording
+                                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title={isRecording ? 'Stop recording' : 'Start voice input'}
+                            >
+                                {isTranscribing ? (
+                                    <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                ) : isRecording ? (
+                                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                )}
+                            </button>
+
                             <div className="flex-1 relative">
                                 <input
                                     ref={inputRef}
@@ -669,14 +622,14 @@ Redirecting to your dashboard...`);
                                     value={inputMessage}
                                     onChange={(e) => setInputMessage(e.target.value)}
                                     onKeyPress={(e) => e.key === 'Enter' && (sessionComplete && !showDoctors ? handleUserConfirmation() : sendMessage())}
-                                    placeholder={sessionComplete ? 'Type Yes to find doctors or No to add more info...' : 'Type your response...'}
+                                    placeholder={isRecording ? '🎤 Recording...' : sessionComplete ? 'Type Yes to find doctors or No to add more info...' : 'Type or speak your symptoms...'}
                                     className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all duration-200 text-gray-900 placeholder-gray-400"
-                                    disabled={loading}
+                                    disabled={loading || isRecording}
                                 />
                             </div>
                             <button
                                 onClick={sessionComplete && !showDoctors ? handleUserConfirmation : sendMessage}
-                                disabled={loading || !inputMessage.trim()}
+                                disabled={loading || !inputMessage.trim() || isRecording}
                                 className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                             >
                                 {loading ? (
@@ -688,6 +641,11 @@ Redirecting to your dashboard...`);
                                 )}
                             </button>
                         </div>
+                        {isRecording && (
+                            <p className="text-center text-red-500 text-sm mt-2 animate-pulse">
+                                🎤 Recording... Click the microphone button to stop
+                            </p>
+                        )}
                     </div>
                 </div>
             )}
