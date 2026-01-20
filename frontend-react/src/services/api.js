@@ -9,6 +9,56 @@ const api = axios.create({
     },
 });
 
+// Add auth token to requests if available
+api.interceptors.request.use((config) => {
+    const user = localStorage.getItem('ehr_user');
+    if (user) {
+        try {
+            const userData = JSON.parse(user);
+            if (userData.token) {
+                config.headers.Authorization = `Bearer ${userData.token}`;
+            }
+        } catch (e) { }
+    }
+    return config;
+});
+
+// ============================================================================
+// AUTHENTICATION API
+// ============================================================================
+
+export const authAPI = {
+    // Login
+    login: async (credentials) => {
+        const response = await api.post('/auth/login', credentials);
+        return response.data;
+    },
+
+    // Signup
+    signup: async (userData) => {
+        const response = await api.post('/auth/signup', userData);
+        return response.data;
+    },
+
+    // Quick signup for emergency
+    quickSignup: async (userData) => {
+        const response = await api.post('/auth/quick-signup', userData);
+        return response.data;
+    },
+
+    // Get current user
+    getCurrentUser: async () => {
+        const response = await api.get('/auth/me');
+        return response.data;
+    },
+
+    // Update profile
+    updateProfile: async (updates) => {
+        const response = await api.put('/auth/profile', updates);
+        return response.data;
+    },
+};
+
 // ============================================================================
 // PATIENT INTAKE API
 // ============================================================================

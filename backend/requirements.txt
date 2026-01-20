@@ -13,3 +13,4 @@ supabase
 pandas
 requests
 streamlit
+sentence-transformers

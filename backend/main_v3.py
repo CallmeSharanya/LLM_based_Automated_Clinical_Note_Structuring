@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -31,6 +31,15 @@ from agents.doctor_matching_agent import doctor_matching_agent
 from agents.dual_validator_agent import dual_validator
 from agents.patient_summary_agent import patient_summary_agent
 from agents.reflexion_agent import reflexion_agent
+
+# Import auth
+from auth import (
+    auth_manager, 
+    LoginRequest, 
+    PatientSignupRequest, 
+    QuickSignupRequest,
+    ProfileUpdateRequest
+)
 
 import google.generativeai as genai
 
@@ -122,9 +131,60 @@ def health():
             "soap_structuring",
             "dual_validation",
             "patient_summary",
-            "reflexion_learning"
+            "reflexion_learning",
+            "multi_role_auth"
         ]
     }
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """Login for patients, doctors, and hospital admins"""
+    return auth_manager.login(request.email, request.password, request.role)
+
+@app.post("/auth/signup")
+async def signup(request: PatientSignupRequest):
+    """Patient registration"""
+    return auth_manager.signup(request)
+
+@app.post("/auth/quick-signup")
+async def quick_signup(request: QuickSignupRequest):
+    """Quick registration for emergency patients"""
+    return auth_manager.quick_signup(request)
+
+@app.get("/auth/me")
+async def get_current_user(authorization: str = Header(None)):
+    """Get current authenticated user"""
+    user = auth_manager.get_current_user(authorization)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role.value,
+        "phone": user.phone,
+        **user.profile,
+    }
+
+@app.put("/auth/profile")
+async def update_profile(
+    request: ProfileUpdateRequest,
+    authorization: str = Header(None)
+):
+    """Update user profile"""
+    user = auth_manager.get_current_user(authorization)
+    return auth_manager.update_profile(user.id, request)
+
+@app.post("/auth/logout")
+async def logout(authorization: str = Header(None)):
+    """Logout user"""
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2:
+            return auth_manager.logout(parts[1])
+    return {"success": True, "message": "Logged out"}
 
 # ============================================================================
 # PATIENT INTAKE ENDPOINTS

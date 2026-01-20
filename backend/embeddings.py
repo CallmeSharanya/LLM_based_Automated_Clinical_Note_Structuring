@@ -9,7 +9,11 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        _model = SentenceTransformer(EMBED_MODEL_NAME)
+        try:
+            _model = SentenceTransformer(EMBED_MODEL_NAME)
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            _model = None
     return _model
 
 def embed_texts(texts):
