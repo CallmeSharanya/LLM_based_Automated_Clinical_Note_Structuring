@@ -370,3 +370,70 @@ def get_doctors_with_availability(specialty: Optional[str] = None) -> List[Dict[
         doctor["available_slots"] = parse_availability_to_slots(availability)
     
     return doctors
+
+
+def get_doctor_appointments(doctor_id: str, date_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Fetch all appointments for a doctor
+    Args:
+        doctor_id: Doctor's UUID
+        date_filter: Optional date filter (YYYY-MM-DD) for today's schedule
+    """
+    supabase = get_supabase_client()
+    
+    print(f"Fetching appointments for doctor: {doctor_id}, date: {date_filter}")
+    
+    try:
+        # Query appointments with patient details via FK join
+        query = supabase.table("appointments")\
+            .select("*, patients(email, name, phone)")\
+            .eq("doctor_id", doctor_id)
+        
+        response = query.execute()
+        
+        print(f"Found {len(response.data or [])} appointments")
+        
+        appointments = []
+        for apt in response.data or []:
+            patient_info = apt.get("patients", {}) or {}
+            timings = apt.get("timings", {})
+            
+            # Handle timings as JSONB object
+            date_part = ""
+            time_part = ""
+            if isinstance(timings, dict):
+                date_part = timings.get("date", "")
+                time_part = timings.get("time", "")
+            elif isinstance(timings, str):
+                parts = timings.split(" ", 1)
+                if len(parts) >= 1:
+                    date_part = parts[0]
+                if len(parts) >= 2:
+                    time_part = parts[1]
+            
+            # Filter by date if specified
+            if date_filter and date_part != date_filter:
+                continue
+            
+            appointments.append({
+                "id": apt.get("id"),
+                "patient_id": apt.get("patient_id"),
+                "patient_name": patient_info.get("name", "Patient"),
+                "patient_email": patient_info.get("email", ""),
+                "patient_phone": patient_info.get("phone", ""),
+                "specialty": apt.get("specialty", "General Medicine"),
+                "date": date_part,
+                "time": time_part,
+                "timings": timings,
+                "status": "confirmed",
+                "type": apt.get("appointment_type", "Consultation")
+            })
+        
+        # Sort by time
+        appointments.sort(key=lambda x: x.get("time", ""))
+        
+        return appointments
+        
+    except Exception as e:
+        print(f"Error fetching doctor appointments: {e}")
+        return []

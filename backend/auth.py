@@ -39,7 +39,7 @@ class User:
 
 
 class LoginRequest(BaseModel):
-    email: str
+    id: str  # Can be email for patients or UUID for doctors
     password: str
     role: str
 
@@ -147,10 +147,57 @@ class AuthManager:
             )
             self.users[user.id] = user
     
-    def login(self, email: str, password: str, role: str) -> Dict[str, Any]:
+    def login(self, user_id: str, password: str, role: str) -> Dict[str, Any]:
         """Authenticate user and return token"""
         
         password_hash = self._hash_password(password)
+        
+        # For doctors, check Supabase doctors table
+        if role == "doctor":
+            try:
+                from supabase_client import get_supabase_client
+                supabase = get_supabase_client()
+                
+                # Query doctor by ID (UUID)
+                response = supabase.table("doctors").select("*").eq("id", user_id).execute()
+                
+                if response.data and len(response.data) > 0:
+                    doctor = response.data[0]
+                    
+                    # Check password
+                    stored_hash = doctor.get("password_hash", "")
+                    if stored_hash and stored_hash == password_hash:
+                        # Generate token
+                        token = self._generate_token()
+                        self.tokens[token] = user_id
+                        
+                        return {
+                            "success": True,
+                            "user": {
+                                "id": user_id,
+                                "email": doctor.get("email", ""),
+                                "name": doctor.get("name"),
+                                "role": "doctor",
+                                "phone": doctor.get("phone"),
+                                "token": token,
+                                "specialty": doctor.get("specialty"),
+                                "subspecialty": doctor.get("subspecialty"),
+                                "experience_years": doctor.get("experience_years"),
+                                "qualifications": doctor.get("qualifications", []),
+                                "rating": doctor.get("rating"),
+                            },
+                            "message": "Login successful"
+                        }
+                    else:
+                        raise HTTPException(status_code=401, detail="Invalid password")
+                else:
+                    # Doctor not found in Supabase, fall back to local
+                    pass
+                    
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"⚠️ Supabase doctor login error: {e}, falling back to local auth")
         
         # For patients, check Supabase first
         if role == "patient":
@@ -158,8 +205,8 @@ class AuthManager:
                 from supabase_client import get_supabase_client
                 supabase = get_supabase_client()
                 
-                # Query patient by email
-                response = supabase.table("patients").select("*").eq("email", email).execute()
+                # Query patient by email (user_id is email for patients)
+                response = supabase.table("patients").select("*").eq("email", user_id).execute()
                 if response.data and len(response.data) > 0:
                     patient = response.data[0]
                     
@@ -168,13 +215,13 @@ class AuthManager:
                     if stored_hash and stored_hash == password_hash:
                         # Generate token
                         token = self._generate_token()
-                        user_id = f"patient-{patient.get('email', '')}"
-                        self.tokens[token] = user_id
+                        patient_id = f"patient-{patient.get('email', '')}"
+                        self.tokens[token] = patient_id
                         
                         return {
                             "success": True,
                             "user": {
-                                "id": user_id,
+                                "id": patient_id,
                                 "email": patient.get("email"),
                                 "name": patient.get("name"),
                                 "role": "patient",
@@ -200,15 +247,16 @@ class AuthManager:
             except Exception as e:
                 print(f"⚠️ Supabase login error: {e}, falling back to local auth")
         
-        # Fall back to local authentication (for demo users and other roles)
+        # Fall back to local authentication (for demo users)
         user = None
         for u in self.users.values():
-            if u.email == email and u.role.value == role:
+            # Check by email or ID
+            if (u.email == user_id or u.id == user_id) and u.role.value == role:
                 user = u
                 break
         
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid email or role")
+            raise HTTPException(status_code=401, detail="Invalid ID or role")
         
         if user.password_hash != password_hash:
             raise HTTPException(status_code=401, detail="Invalid password")

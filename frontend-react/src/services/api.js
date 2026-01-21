@@ -144,7 +144,7 @@ export const appointmentAPI = {
         const response = await api.post('/appointments/book', {
             patient_id: patientId,
             doctor_id: doctorId,
-            appointment_date: date,
+            appointment_date: new Date().toISOString().split('T')[0];,
             appointment_time: time,
             specialty: specialty,
             session_id: sessionId,
@@ -156,6 +156,13 @@ export const appointmentAPI = {
     // Get patient's appointments
     getPatientAppointments: async (patientId) => {
         const response = await api.get(`/appointments/patient/${patientId}`);
+        return response.data;
+    },
+
+    // Get doctor's appointments (with optional date filter for today's schedule)
+    getDoctorAppointments: async (doctorId, date = null) => {
+        const params = date ? { date } : {};
+        const response = await api.get(`/appointments/doctor/${doctorId}`, { params });
         return response.data;
     }
 };

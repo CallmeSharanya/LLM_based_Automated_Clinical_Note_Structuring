@@ -31,6 +31,7 @@ from supabase_client import (
     get_doctors_with_availability,
     book_appointment,
     get_patient_appointments,
+    get_doctor_appointments,
     parse_availability_to_slots
 )
 
@@ -162,7 +163,7 @@ def health():
 @app.post("/auth/login")
 async def login(request: LoginRequest):
     """Login for patients, doctors, and hospital admins"""
-    return auth_manager.login(request.email, request.password, request.role)
+    return auth_manager.login(request.id, request.password, request.role)
 
 @app.post("/auth/signup")
 async def signup(request: PatientSignupRequest):
@@ -403,6 +404,27 @@ async def get_appointments_for_patient(patient_id: str):
         }
     except Exception as e:
         print(f"Error fetching appointments: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "appointments": []
+        }
+
+@app.get("/appointments/doctor/{doctor_id}")
+async def get_appointments_for_doctor(doctor_id: str, date: str = None):
+    """
+    Fetch all appointments for a doctor
+    Optional date parameter for filtering (e.g., today's schedule)
+    """
+    try:
+        appointments = get_doctor_appointments(doctor_id, date)
+        return {
+            "success": True,
+            "appointments": appointments,
+            "count": len(appointments)
+        }
+    except Exception as e:
+        print(f"Error fetching doctor appointments: {e}")
         return {
             "success": False,
             "error": str(e),

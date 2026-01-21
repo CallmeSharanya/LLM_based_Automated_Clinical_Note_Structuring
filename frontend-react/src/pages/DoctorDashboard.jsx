@@ -11,10 +11,13 @@ import {
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { intakeAPI, encounterAPI, summaryAPI, soapAPI } from '../services/api';
+import { intakeAPI, encounterAPI, summaryAPI, soapAPI, appointmentAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function DoctorDashboard() {
+    const { user } = useAuth();
     const [sessions, setSessions] = useState([]);
+    const [todaySchedule, setTodaySchedule] = useState([]);
     const [selectedSession, setSelectedSession] = useState(null);
     const [activeTab, setActiveTab] = useState('queue'); // queue, encounter, summary
     const [editedSoap, setEditedSoap] = useState(null);
@@ -22,10 +25,11 @@ export default function DoctorDashboard() {
     const [patientSummary, setPatientSummary] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Load sessions on mount
+    // Load sessions and today's schedule on mount
     useEffect(() => {
         loadSessions();
-    }, []);
+        loadTodaySchedule();
+    }, [user?.id]);
 
     const loadSessions = async () => {
         try {
@@ -33,6 +37,22 @@ export default function DoctorDashboard() {
             setSessions(response.sessions || []);
         } catch (error) {
             console.error('Failed to load sessions:', error);
+        }
+    };
+
+    const loadTodaySchedule = async () => {
+        if (!user?.id) return;
+
+        try {
+            // Get today's date in YYYY-MM-DD format
+            const today = new Date().toISOString().split('T')[0];
+            const response = await appointmentAPI.getDoctorAppointments(user.id, today);
+
+            if (response.success) {
+                setTodaySchedule(response.appointments || []);
+            }
+        } catch (error) {
+            console.error('Failed to load today\'s schedule:', error);
         }
     };
 
@@ -141,7 +161,64 @@ export default function DoctorDashboard() {
     };
 
     const renderQueue = () => (
-        <div className="space-y-4">
+        <div className="space-y-6">
+            {/* Today's Schedule from Supabase */}
+            <section className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Today's Schedule</h2>
+                        <p className="text-gray-600">Your appointments for today</p>
+                    </div>
+                    <button onClick={loadTodaySchedule} className="btn-secondary text-sm">
+                        Refresh
+                    </button>
+                </div>
+
+                {todaySchedule.length === 0 ? (
+                    <div className="card text-center py-8 bg-gradient-to-br from-blue-50 to-indigo-50">
+                        <ClockIcon className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+                        <h3 className="text-lg font-medium text-gray-900">No appointments today</h3>
+                        <p className="text-gray-500">Your schedule is clear for today</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-3">
+                        {todaySchedule.map((apt, index) => (
+                            <motion.div
+                                key={apt.id || index}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="card bg-white border border-gray-200 hover:shadow-md transition-shadow"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold">
+                                            {apt.patient_name?.charAt(0) || 'P'}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900">{apt.patient_name || 'Patient'}</h4>
+                                            <p className="text-sm text-gray-500 flex items-center gap-2">
+                                                <span>{apt.specialty || 'Consultation'}</span>
+                                                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                                <span>{apt.patient_email || apt.patient_phone}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-indigo-600 text-lg">{apt.time || 'TBD'}</p>
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                            {apt.status}
+                                        </span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            {/* Patient Queue Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Patient Queue</h2>

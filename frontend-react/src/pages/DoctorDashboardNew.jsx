@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { encounterAPI, analyticsAPI, chatAPI } from '../services/api';
+import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI } from '../services/api';
 
 export default function DoctorDashboardNew() {
     const { user, logout } = useAuth();
@@ -16,78 +16,60 @@ export default function DoctorDashboardNew() {
 
     // Stats
     const [stats, setStats] = useState({
-        todayPatients: 8,
-        pendingReviews: 3,
-        completedToday: 5,
-        upcomingWeek: 24,
+        todayPatients: 0,
+        pendingReviews: 0,
+        completedToday: 0,
+        upcomingWeek: 0,
     });
 
     useEffect(() => {
         loadAppointments();
-    }, []);
+    }, [user?.id]);
 
     const loadAppointments = async () => {
+        if (!user?.id) {
+            setLoading(false);
+            return;
+        }
+
         try {
-            // In production, fetch from backend
-            // Demo data
-            setAppointments([
-                {
-                    id: 'apt-1',
-                    patient_name: 'John Doe',
-                    patient_age: 45,
-                    patient_gender: 'Male',
-                    time: '09:00 AM',
-                    date: '2026-01-20',
-                    type: 'Follow-up',
-                    status: 'in-progress',
-                    chief_complaint: 'Chest discomfort and fatigue',
-                    triage_priority: 'yellow',
-                    preliminary_soap: {
-                        Subjective: 'Patient reports intermittent chest discomfort for 2 days...',
-                        Objective: 'BP: 140/90, HR: 88, Temp: 98.6°F',
-                        Assessment: 'Possible angina, rule out ACS',
-                        Plan: 'ECG, cardiac enzymes, stress test if needed',
-                    },
-                },
-                {
-                    id: 'apt-2',
-                    patient_name: 'Sarah Smith',
-                    patient_age: 32,
-                    patient_gender: 'Female',
-                    time: '10:30 AM',
-                    date: '2026-01-20',
-                    type: 'New Patient',
-                    status: 'waiting',
-                    chief_complaint: 'Persistent headache and dizziness',
-                    triage_priority: 'yellow',
-                },
-                {
-                    id: 'apt-3',
-                    patient_name: 'Raj Kumar',
-                    patient_age: 58,
-                    patient_gender: 'Male',
-                    time: '11:30 AM',
-                    date: '2026-01-20',
-                    type: 'Follow-up',
-                    status: 'scheduled',
-                    chief_complaint: 'Diabetes management review',
+            // Get today's date in YYYY-MM-DD format
+            const today = new Date().toISOString().split('T')[0];
+
+            // Fetch real appointments from Supabase for this doctor
+            const response = await appointmentAPI.getDoctorAppointments(user.id, today);
+
+            if (response.success && response.appointments) {
+                const formattedAppointments = response.appointments.map(apt => ({
+                    id: apt.id,
+                    patient_name: apt.patient_name || 'Patient',
+                    patient_email: apt.patient_email,
+                    patient_phone: apt.patient_phone,
+                    patient_age: apt.patient_age || '-',
+                    patient_gender: apt.patient_gender || '-',
+                    time: apt.time || 'TBD',
+                    date: apt.date,
+                    type: apt.type || 'Consultation',
+                    status: apt.status || 'scheduled',
+                    chief_complaint: apt.specialty || 'General Consultation',
                     triage_priority: 'green',
-                },
-                {
-                    id: 'apt-4',
-                    patient_name: 'Priya Menon',
-                    patient_age: 28,
-                    patient_gender: 'Female',
-                    time: '02:00 PM',
-                    date: '2026-01-20',
-                    type: 'Urgent',
-                    status: 'scheduled',
-                    chief_complaint: 'Severe abdominal pain since morning',
-                    triage_priority: 'orange',
-                },
-            ]);
+                }));
+
+                setAppointments(formattedAppointments);
+
+                // Update stats
+                setStats({
+                    todayPatients: formattedAppointments.length,
+                    pendingReviews: formattedAppointments.filter(a => a.status === 'waiting').length,
+                    completedToday: formattedAppointments.filter(a => a.status === 'completed').length,
+                    upcomingWeek: formattedAppointments.length,
+                });
+            } else {
+                setAppointments([]);
+            }
         } catch (error) {
             console.error('Failed to load appointments:', error);
+            setAppointments([]);
         } finally {
             setLoading(false);
         }
@@ -205,8 +187,8 @@ export default function DoctorDashboardNew() {
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`px-4 py-2 rounded-lg font-medium capitalize whitespace-nowrap transition-colors ${activeTab === tab
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-100'
                                 }`}
                         >
                             {tab === 'chat' ? '💬 Clinical Chat' : tab === 'analytics' ? '📊 Analytics' : '📅 Appointments'}
@@ -229,8 +211,8 @@ export default function DoctorDashboardNew() {
                                             key={apt.id}
                                             onClick={() => setSelectedAppointment(apt)}
                                             className={`bg-white rounded-xl p-4 shadow-sm border-2 cursor-pointer transition-all ${selectedAppointment?.id === apt.id
-                                                    ? 'border-green-500'
-                                                    : 'border-transparent hover:border-gray-200'
+                                                ? 'border-green-500'
+                                                : 'border-transparent hover:border-gray-200'
                                                 }`}
                                         >
                                             <div className="flex items-start justify-between">
@@ -348,8 +330,8 @@ export default function DoctorDashboardNew() {
                                     >
                                         <div
                                             className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user'
-                                                    ? 'bg-green-600 text-white'
-                                                    : 'bg-gray-100 text-gray-900'
+                                                ? 'bg-green-600 text-white'
+                                                : 'bg-gray-100 text-gray-900'
                                                 }`}
                                         >
                                             <div className="whitespace-pre-wrap text-sm">

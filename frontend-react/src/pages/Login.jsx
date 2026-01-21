@@ -5,7 +5,7 @@ import { authAPI } from '../services/api';
 
 export default function Login() {
     const [selectedRole, setSelectedRole] = useState(null);
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [formData, setFormData] = useState({ id: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { login } = useAuth();
@@ -52,7 +52,7 @@ export default function Login() {
 
         try {
             const response = await authAPI.login({
-                email: formData.email,
+                id: formData.id,
                 password: formData.password,
                 role: selectedRole,
             });
@@ -229,14 +229,14 @@ export default function Login() {
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-300 mb-2">
-                                        Email Address
+                                        Id
                                     </label>
                                     <input
-                                        type="email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        type="text"
+                                        value={formData.id}
+                                        onChange={(e) => setFormData({ ...formData, id: e.target.value })}
                                         className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all duration-300"
-                                        placeholder="you@example.com"
+                                        placeholder="Id"
                                         required
                                     />
                                 </div>
