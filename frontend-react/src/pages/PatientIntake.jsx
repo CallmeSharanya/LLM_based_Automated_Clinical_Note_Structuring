@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { intakeAPI, doctorAPI } from '../services/api';
+import { intakeAPI, doctorAPI, appointmentAPI } from '../services/api';
 
 export default function PatientIntake() {
     const { user } = useAuth();
@@ -216,16 +216,42 @@ export default function PatientIntake() {
 
     const matchDoctors = async (specialty, priority) => {
         setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         try {
-            const response = await doctorAPI.matchDoctors(['symptoms'], priority || 'yellow');
-            const doctors = response.alternative_doctors || [];
-            if (response.recommended_doctor) {
-                doctors.unshift(response.recommended_doctor);
+            // Fetch doctors from Supabase with real availability
+            const response = await appointmentAPI.getDoctors(specialty);
+
+            if (response.success && response.doctors?.length > 0) {
+                // Transform doctors data for display
+                const doctors = response.doctors.map((doc, index) => ({
+                    id: doc.id,
+                    name: doc.name,
+                    specialty: doc.specialty || 'General Medicine',
+                    subspecialty: doc.subspecialty,
+                    rating: doc.rating || 4.5,
+                    reviews: doc.reviews || 100,
+                    experience_years: doc.experience_years || 5,
+                    available_slots: doc.available_slots || [], // Parsed from availability JSONB
+                    consultation_fee: doc.consultation_fee || 500,
+                    languages: doc.languages || ['English', 'Hindi'],
+                    nextAvailable: doc.available_slots?.[0]?.display || 'Check availability',
+                    current_load: doc.current_load || 0,
+                    max_load: doc.max_load || 20
+                }));
+                setMatchedDoctors(doctors);
+            } else {
+                // Fallback to doctor matching agent if Supabase returns no results
+                const matchResponse = await doctorAPI.matchDoctors(['symptoms'], priority || 'yellow');
+                const doctors = matchResponse.alternative_doctors || [];
+                if (matchResponse.recommended_doctor) {
+                    doctors.unshift(matchResponse.recommended_doctor);
+                }
+                setMatchedDoctors(doctors);
             }
-            setMatchedDoctors(doctors);
         } catch (error) {
+            console.error('Error fetching doctors:', error);
+            // Fallback to mock data
             setMatchedDoctors([
                 {
                     id: 'doc-001',
@@ -235,25 +261,13 @@ export default function PatientIntake() {
                     rating: 4.9,
                     reviews: 284,
                     experience_years: 12,
-                    available_slots: ['Today, 2:30 PM', 'Today, 5:00 PM', 'Tomorrow, 9:00 AM', 'Tomorrow, 11:30 AM'],
+                    available_slots: [
+                        { date: new Date().toISOString().split('T')[0], day: 'Today', time: '14:00-15:00', display: 'Today at 14:00' },
+                        { date: new Date().toISOString().split('T')[0], day: 'Today', time: '17:00-18:00', display: 'Today at 17:00' }
+                    ],
                     consultation_fee: 800,
                     languages: ['English', 'Hindi', 'Kannada'],
-                    nextAvailable: '2:30 PM Today',
-                    hospital: 'Apollo Hospital',
-                },
-                {
-                    id: 'doc-002',
-                    name: 'Dr. Rajesh Kumar',
-                    specialty: specialty || 'General Medicine',
-                    subspecialty: 'Family Medicine',
-                    rating: 4.7,
-                    reviews: 156,
-                    experience_years: 8,
-                    available_slots: ['Today, 4:00 PM', 'Tomorrow, 10:30 AM', 'Tomorrow, 2:00 PM', 'Tomorrow, 4:30 PM'],
-                    consultation_fee: 600,
-                    languages: ['English', 'Hindi'],
-                    nextAvailable: '4:00 PM Today',
-                    hospital: 'Manipal Hospital',
+                    nextAvailable: 'Today at 14:00',
                 },
             ]);
         } finally {
@@ -266,18 +280,26 @@ export default function PatientIntake() {
         setLoading(true);
 
         try {
-            await doctorAPI.assignDoctor(sessionId, selectedDoctor.id, selectedSlot);
-        } catch (error) {
-            // Continue even if API fails
-        }
+            // Book appointment using new Supabase-backed API
+            const bookingResult = await appointmentAPI.book(
+                user?.id || 'guest',
+                selectedDoctor.id,
+                selectedSlot.date,
+                selectedSlot.time,
+                selectedDoctor.specialty,
+                sessionId,
+                'Consultation'
+            );
 
-        addAssistantMessage(`🎉 **Appointment Confirmed!**
+            if (bookingResult.success) {
+                addAssistantMessage(`🎉 **Appointment Confirmed!**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 **Doctor:** ${selectedDoctor.name}
 **Specialty:** ${selectedDoctor.specialty}
-**Time:** ${selectedSlot}
+**Date:** ${selectedSlot.date}
+**Time:** ${selectedSlot.time}
 **Fee:** ₹${selectedDoctor.consultation_fee}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -288,14 +310,52 @@ export default function PatientIntake() {
 
 Redirecting to your dashboard...`);
 
-        setTimeout(() => {
-            navigate('/patient/home', {
-                state: {
-                    message: 'Appointment booked successfully!',
-                    appointment: { doctor: selectedDoctor, slot: selectedSlot }
-                }
-            });
-        }, 3000);
+                setTimeout(() => {
+                    navigate('/patient/home', {
+                        state: {
+                            message: 'Appointment booked successfully!',
+                            appointment: { doctor: selectedDoctor, slot: selectedSlot }
+                        }
+                    });
+                }, 3000);
+            } else {
+                addAssistantMessage(`❌ **Booking Failed**\n\nSorry, we couldn't book this appointment. ${bookingResult.error || 'Please try again.'}`);
+            }
+        } catch (error) {
+            console.error('Error booking appointment:', error);
+            // Fallback to old method
+            try {
+                await doctorAPI.assignDoctor(sessionId, selectedDoctor.id, selectedSlot.display || selectedSlot);
+            } catch (e) {
+                // Ignore
+            }
+
+            addAssistantMessage(`🎉 **Appointment Confirmed!**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Doctor:** ${selectedDoctor.name}
+**Specialty:** ${selectedDoctor.specialty}
+**Time:** ${selectedSlot.display || selectedSlot}
+**Fee:** ₹${selectedDoctor.consultation_fee}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Your preliminary assessment has been shared with the doctor.
+📧 You'll receive a confirmation email shortly.
+📱 Reminder will be sent 1 hour before the appointment.
+
+Redirecting to your dashboard...`);
+
+            setTimeout(() => {
+                navigate('/patient/home', {
+                    state: {
+                        message: 'Appointment booked successfully!',
+                        appointment: { doctor: selectedDoctor, slot: selectedSlot }
+                    }
+                });
+            }, 3000);
+        }
 
         setLoading(false);
     };
@@ -512,26 +572,34 @@ Redirecting to your dashboard...`);
                                                         Select Appointment Time
                                                     </p>
                                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                        {doc.available_slots?.map((slot, idx) => (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedSlot(slot);
-                                                                }}
-                                                                className={`px-4 py-3.5 text-sm font-semibold rounded-xl border-2 transition-all duration-200 ${selectedSlot === slot
-                                                                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-transparent shadow-lg shadow-indigo-500/30 scale-105'
-                                                                    : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md'
-                                                                    }`}
-                                                            >
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <span className={`text-xs ${selectedSlot === slot ? 'text-white/80' : 'text-gray-400'}`}>
-                                                                        {slot.includes('Today') ? '📅 Today' : slot.includes('Tomorrow') ? '📅 Tomorrow' : '📅'}
-                                                                    </span>
-                                                                    <span>{slot.split(', ')[1] || slot}</span>
-                                                                </div>
-                                                            </button>
-                                                        ))}
+                                                        {doc.available_slots?.slice(0, 8).map((slot, idx) => {
+                                                            // Handle both object format and string format
+                                                            const slotDisplay = typeof slot === 'object' ? slot.display : slot;
+                                                            const slotDay = typeof slot === 'object' ? slot.day : (slot?.includes('Today') ? 'Today' : slot?.includes('Tomorrow') ? 'Tomorrow' : '');
+                                                            const slotTime = typeof slot === 'object' ? slot.time?.split('-')[0] : (slot?.split(', ')[1] || slot);
+                                                            const isSelected = selectedSlot === slot || (selectedSlot?.time === slot?.time && selectedSlot?.date === slot?.date);
+
+                                                            return (
+                                                                <button
+                                                                    key={idx}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedSlot(slot);
+                                                                    }}
+                                                                    className={`px-4 py-3.5 text-sm font-semibold rounded-xl border-2 transition-all duration-200 ${isSelected
+                                                                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-transparent shadow-lg shadow-indigo-500/30 scale-105'
+                                                                        : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md'
+                                                                        }`}
+                                                                >
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className={`text-xs ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+                                                                            📅 {slotDay}
+                                                                        </span>
+                                                                        <span>{slotTime}</span>
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
                                                     </div>
 
                                                     {selectedSlot && (
@@ -545,7 +613,12 @@ Redirecting to your dashboard...`);
                                                                     </div>
                                                                     <div>
                                                                         <p className="text-sm text-gray-600">Selected Appointment</p>
-                                                                        <p className="font-bold text-gray-900">{selectedSlot}</p>
+                                                                        <p className="font-bold text-gray-900">
+                                                                            {typeof selectedSlot === 'object'
+                                                                                ? `${selectedSlot.day}, ${selectedSlot.date} at ${selectedSlot.time?.split('-')[0]}`
+                                                                                : selectedSlot
+                                                                            }
+                                                                        </p>
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-right">

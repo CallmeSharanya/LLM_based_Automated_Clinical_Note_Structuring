@@ -25,6 +25,15 @@ from llm_structurer import embed_with_gemini
 from icd_mapper import load_icd_codes, match_icd
 from db_utils import insert_note, fetch_similar_notes, get_all_notes
 
+# Import Supabase client for doctor/appointment operations
+from supabase_client import (
+    get_doctors_from_supabase,
+    get_doctors_with_availability,
+    book_appointment,
+    get_patient_appointments,
+    parse_availability_to_slots
+)
+
 # Import agents
 from agents.custom_orchestrator import orchestrator, run_full_pipeline_custom
 from agents.intake_triage_agent import intake_agent, IntakeSession
@@ -114,6 +123,15 @@ class PatientSummaryRequest(BaseModel):
 
 class LoadDoctorsRequest(BaseModel):
     doctors: List[Dict[str, Any]]
+
+class BookAppointmentRequest(BaseModel):
+    patient_id: str
+    doctor_id: str
+    appointment_date: str
+    appointment_time: str
+    specialty: str
+    session_id: Optional[str] = None
+    type: str = "Consultation"
 
 # ============================================================================
 # HEALTH CHECK
@@ -322,8 +340,79 @@ async def get_specialties():
     return {"specialties": sorted(list(specialties))}
 
 # ============================================================================
+# DOCTOR & APPOINTMENT ENDPOINTS (SUPABASE)
+# ============================================================================
+
+@app.get("/doctors")
+async def get_doctors(specialty: Optional[str] = None):
+    """Fetch doctors from Supabase with their availability slots"""
+    try:
+        doctors = get_doctors_with_availability(specialty)
+        return {
+            "success": True,
+            "doctors": doctors,
+            "count": len(doctors)
+        }
+    except Exception as e:
+        print(f"Error fetching doctors: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "doctors": []
+        }
+
+@app.post("/appointments/book")
+async def create_appointment(request: BookAppointmentRequest):
+    """
+    Book an appointment:
+    1. Create appointment record in Supabase
+    2. Update doctor's availability JSONB (remove booked slot)
+    3. Increment doctor's current_load
+    """
+    try:
+        result = book_appointment(
+            patient_id=request.patient_id,
+            doctor_id=request.doctor_id,
+            appointment_date=request.appointment_date,
+            appointment_time=request.appointment_time,
+            specialty=request.specialty,
+            session_id=request.session_id,
+            appointment_type=request.type
+        )
+        
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to book appointment"))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error booking appointment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/appointments/patient/{patient_id}")
+async def get_appointments_for_patient(patient_id: str):
+    """Fetch all appointments for a patient with doctor details"""
+    try:
+        appointments = get_patient_appointments(patient_id)
+        return {
+            "success": True,
+            "appointments": appointments,
+            "count": len(appointments)
+        }
+    except Exception as e:
+        print(f"Error fetching appointments: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "appointments": []
+        }
+
+# ============================================================================
 # SOAP PROCESSING ENDPOINTS
 # ============================================================================
+
 
 @app.post("/process_note/")
 async def process_note(

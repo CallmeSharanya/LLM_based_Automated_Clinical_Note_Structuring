@@ -128,6 +128,39 @@ export const doctorAPI = {
 };
 
 // ============================================================================
+// APPOINTMENT API
+// ============================================================================
+
+export const appointmentAPI = {
+    // Get all doctors from Supabase (optionally filtered by specialty)
+    getDoctors: async (specialty = null) => {
+        const params = specialty ? { specialty } : {};
+        const response = await api.get('/doctors', { params });
+        return response.data;
+    },
+
+    // Book an appointment
+    book: async (patientId, doctorId, date, time, specialty, sessionId = null, type = 'Consultation') => {
+        const response = await api.post('/appointments/book', {
+            patient_id: patientId,
+            doctor_id: doctorId,
+            appointment_date: date,
+            appointment_time: time,
+            specialty: specialty,
+            session_id: sessionId,
+            type: type
+        });
+        return response.data;
+    },
+
+    // Get patient's appointments
+    getPatientAppointments: async (patientId) => {
+        const response = await api.get(`/appointments/patient/${patientId}`);
+        return response.data;
+    }
+};
+
+// ============================================================================
 // SOAP PROCESSING API
 // ============================================================================
 

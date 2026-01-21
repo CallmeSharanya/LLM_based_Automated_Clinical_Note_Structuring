@@ -152,7 +152,55 @@ class AuthManager:
         
         password_hash = self._hash_password(password)
         
-        # Find user by email and role
+        # For patients, check Supabase first
+        if role == "patient":
+            try:
+                from supabase_client import get_supabase_client
+                supabase = get_supabase_client()
+                
+                # Query patient by email
+                response = supabase.table("patients").select("*").eq("email", email).execute()
+                if response.data and len(response.data) > 0:
+                    patient = response.data[0]
+                    
+                    # Check password
+                    stored_hash = patient.get("password_hash", "")
+                    if stored_hash and stored_hash == password_hash:
+                        # Generate token
+                        token = self._generate_token()
+                        user_id = f"patient-{patient.get('email', '')}"
+                        self.tokens[token] = user_id
+                        
+                        return {
+                            "success": True,
+                            "user": {
+                                "id": user_id,
+                                "email": patient.get("email"),
+                                "name": patient.get("name"),
+                                "role": "patient",
+                                "phone": patient.get("phone"),
+                                "token": token,
+                                "date_of_birth": patient.get("date_of_birth"),
+                                "gender": patient.get("gender"),
+                                "blood_group": patient.get("blood_group"),
+                                "allergies": patient.get("allergies", []),
+                                "chronic_conditions": patient.get("chronic_conditions", []),
+                                "current_medications": patient.get("current_medications", []),
+                            },
+                            "message": "Login successful"
+                        }
+                    else:
+                        raise HTTPException(status_code=401, detail="Invalid password")
+                else:
+                    # Patient not found in Supabase, fall back to local
+                    pass
+                    
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"⚠️ Supabase login error: {e}, falling back to local auth")
+        
+        # Fall back to local authentication (for demo users and other roles)
         user = None
         for u in self.users.values():
             if u.email == email and u.role.value == role:
@@ -225,6 +273,35 @@ class AuthManager:
         
         self.users[user.id] = user
         
+        # Insert patient into Supabase
+        try:
+            from supabase_client import get_supabase_client
+            supabase = get_supabase_client()
+            
+            # Prepare patient data for Supabase
+            patient_data = {
+                "email": data.email or f"{data.phone}@temp.ehr",
+                "name": data.name,
+                "phone": data.phone,
+                "password_hash": self._hash_password(data.password),  # Store hashed password for login
+                "date_of_birth": data.date_of_birth,
+                "gender": data.gender,
+                "blood_group": data.blood_group,
+                "address": data.address.get("full", "") if isinstance(data.address, dict) else (data.address or ""),
+                "emergency_contact": data.emergency_contact.get("phone", "") if isinstance(data.emergency_contact, dict) else "",
+                "allergies": data.allergies or [],
+                "chronic_conditions": data.chronic_conditions or [],
+                "current_medications": data.current_medications or []
+            }
+            
+            # Insert into patients table
+            supabase.table("patients").insert(patient_data).execute()
+            print(f"✅ Patient {data.email} inserted into Supabase")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not insert patient into Supabase: {e}")
+            # Continue with local registration even if Supabase fails
+        
         # Auto-login
         token = self._generate_token()
         self.tokens[token] = user.id
@@ -286,6 +363,26 @@ class AuthManager:
         )
         
         self.users[user.id] = user
+        
+        # Insert emergency patient into Supabase
+        try:
+            from supabase_client import get_supabase_client
+            supabase = get_supabase_client()
+            
+            patient_data = {
+                "email": f"{data.phone}@emergency.ehr",
+                "name": data.name,
+                "phone": data.phone,
+                "allergies": [],
+                "chronic_conditions": [],
+                "current_medications": []
+            }
+            
+            supabase.table("patients").insert(patient_data).execute()
+            print(f"✅ Emergency patient {data.phone} inserted into Supabase")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not insert emergency patient into Supabase: {e}")
         
         token = self._generate_token()
         self.tokens[token] = user.id

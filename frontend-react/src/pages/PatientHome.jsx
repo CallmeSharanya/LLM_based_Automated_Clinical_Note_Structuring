@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { intakeAPI, doctorAPI, encounterAPI } from '../services/api';
+import { intakeAPI, doctorAPI, encounterAPI, appointmentAPI } from '../services/api';
 
 export default function PatientHome() {
     const { user, logout } = useAuth();
@@ -11,34 +11,40 @@ export default function PatientHome() {
 
     useEffect(() => {
         loadAppointments();
-    }, []);
+    }, [user?.id]);
 
     const loadAppointments = async () => {
+        // Use email to fetch appointments (patient_id in table is email)
+        const patientEmail = user?.email || user?.id;
+        if (!patientEmail) {
+            setLoading(false);
+            return;
+        }
+
         try {
-            // In production, fetch from backend
-            // For demo, use mock data
-            setAppointments([
-                {
-                    id: 1,
-                    doctor_name: 'Dr. Priya Sharma',
-                    specialty: 'Cardiology',
-                    date: '2026-01-22',
-                    time: '10:00 AM',
-                    status: 'confirmed',
-                    type: 'Follow-up',
-                },
-                {
-                    id: 2,
-                    doctor_name: 'Dr. Ananya Patel',
-                    specialty: 'General Medicine',
-                    date: '2026-01-25',
-                    time: '02:30 PM',
-                    status: 'pending',
-                    type: 'Consultation',
-                },
-            ]);
+            // Fetch real appointments from Supabase using email
+            const response = await appointmentAPI.getPatientAppointments(patientEmail);
+
+            if (response.success && response.appointments) {
+                // Transform appointments for display
+                const formattedAppointments = response.appointments.map(apt => ({
+                    id: apt.id,
+                    doctor_name: apt.doctor_name || 'Doctor',
+                    specialty: apt.specialty || 'General Medicine',
+                    date: apt.date,
+                    time: apt.time?.split('-')[0] || apt.time, // Show start time only
+                    status: apt.status || 'confirmed',
+                    type: apt.type || 'Consultation',
+                    consultation_fee: apt.consultation_fee
+                }));
+                setAppointments(formattedAppointments);
+            } else {
+                // No appointments found
+                setAppointments([]);
+            }
         } catch (error) {
             console.error('Failed to load appointments:', error);
+            setAppointments([]);
         } finally {
             setLoading(false);
         }
@@ -266,42 +272,37 @@ export default function PatientHome() {
                         Recent Activity
                     </h2>
                     <div className="bg-white rounded-3xl border border-gray-100 shadow-soft divide-y divide-gray-100 overflow-hidden">
-                        <div className="p-5 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center text-emerald-600">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
+                        {appointments.length > 0 ? (
+                            appointments.slice(0, 3).map((apt, idx) => (
+                                <div key={apt.id || idx} className="p-5 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center text-emerald-600">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-gray-900">Appointment booked</p>
+                                        <p className="text-sm text-gray-500">{apt.doctor_name} - {apt.specialty} on {apt.date}</p>
+                                    </div>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${apt.status === 'confirmed'
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                        {apt.status}
+                                    </span>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-8 text-center">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-100 to-slate-100 flex items-center justify-center mx-auto mb-3">
+                                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <p className="text-gray-500">No recent activity</p>
+                                <p className="text-sm text-gray-400 mt-1">Book an appointment to get started</p>
                             </div>
-                            <div className="flex-1">
-                                <p className="font-semibold text-gray-900">Prescription filled</p>
-                                <p className="text-sm text-gray-500">Metformin 500mg - Jan 18, 2026</p>
-                            </div>
-                            <span className="text-xs text-gray-400">2 days ago</span>
-                        </div>
-                        <div className="p-5 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-600">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            </div>
-                            <div className="flex-1">
-                                <p className="font-semibold text-gray-900">Lab results available</p>
-                                <p className="text-sm text-gray-500">Complete Blood Count - Jan 15, 2026</p>
-                            </div>
-                            <span className="text-xs text-gray-400">5 days ago</span>
-                        </div>
-                        <div className="p-5 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-purple-600">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
-                            </div>
-                            <div className="flex-1">
-                                <p className="font-semibold text-gray-900">Doctor message</p>
-                                <p className="text-sm text-gray-500">Dr. Sharma sent you a message - Jan 12, 2026</p>
-                            </div>
-                            <span className="text-xs text-gray-400">8 days ago</span>
-                        </div>
+                        )}
                     </div>
                 </section>
             </main>

@@ -151,6 +151,7 @@ export default function PatientSignup() {
                     city: formData.city,
                     state: formData.state,
                     pincode: formData.pincode,
+                    full: `${formData.address_line}, ${formData.city}, ${formData.state} ${formData.pincode}`.replace(/^, |, $|, , /g, '').trim()
                 },
             };
 
@@ -280,10 +281,10 @@ export default function PatientSignup() {
                         <div key={s} className="flex items-center">
                             <div
                                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${s === step
-                                        ? 'bg-blue-500 text-white'
-                                        : s < step
-                                            ? 'bg-green-500 text-white'
-                                            : 'bg-white/10 text-gray-400'
+                                    ? 'bg-blue-500 text-white'
+                                    : s < step
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-white/10 text-gray-400'
                                     }`}
                             >
                                 {s < step ? '✓' : s}
