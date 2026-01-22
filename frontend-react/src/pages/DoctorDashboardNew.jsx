@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI } from '../services/api';
+import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI, soapAPI } from '../services/api';
 
 export default function DoctorDashboardNew() {
     const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('appointments');
     const [appointments, setAppointments] = useState([]);
+    const [pendingSOAPs, setPendingSOAPs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedAppointment, setSelectedAppointment] = useState(null);
+    const [selectedSOAP, setSelectedSOAP] = useState(null);
+    const [editingSOAP, setEditingSOAP] = useState(null);
+    const [saving, setSaving] = useState(false);
 
     // Chat state
     const [chatQuery, setChatQuery] = useState('');
@@ -24,7 +28,25 @@ export default function DoctorDashboardNew() {
 
     useEffect(() => {
         loadAppointments();
+        loadPendingSOAPs();
     }, [user?.id]);
+
+    const loadPendingSOAPs = async () => {
+        if (!user?.id) return;
+
+        try {
+            const response = await soapAPI.getDoctorPendingSOAPs(user.id);
+            if (response.success && response.pending_soaps) {
+                setPendingSOAPs(response.pending_soaps);
+                setStats(prev => ({
+                    ...prev,
+                    pendingReviews: response.pending_soaps.length
+                }));
+            }
+        } catch (error) {
+            console.error('Error loading pending SOAPs:', error);
+        }
+    };
 
     const loadAppointments = async () => {
         if (!user?.id) {
@@ -130,6 +152,44 @@ export default function DoctorDashboardNew() {
         return colors[priority] || colors.green;
     };
 
+    const handleSelectSOAP = (soap) => {
+        setSelectedSOAP(soap);
+        setEditingSOAP({
+            subjective: soap.draft_soap?.subjective || soap.draft_soap?.Subjective || '',
+            objective: soap.draft_soap?.objective || soap.draft_soap?.Objective || '',
+            assessment: soap.draft_soap?.assessment || soap.draft_soap?.Assessment || '',
+            plan: soap.draft_soap?.plan || soap.draft_soap?.Plan || ''
+        });
+    };
+
+    const handleSaveSOAP = async () => {
+        if (!selectedSOAP || !editingSOAP) return;
+
+        setSaving(true);
+        try {
+            const response = await soapAPI.finalizeSoap(
+                selectedSOAP.id,
+                selectedSOAP.patient_id,
+                user.id,
+                editingSOAP
+            );
+
+            if (response.success) {
+                alert('SOAP finalized successfully!');
+                loadPendingSOAPs();
+                setSelectedSOAP(null);
+                setEditingSOAP(null);
+            } else {
+                alert('Error finalizing SOAP: ' + response.error);
+            }
+        } catch (error) {
+            console.error('Error saving SOAP:', error);
+            alert('Failed to save SOAP');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -182,16 +242,28 @@ export default function DoctorDashboardNew() {
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                    {['appointments', 'chat', 'analytics'].map((tab) => (
+                    {['appointments', 'pending-soaps', 'chat', 'analytics'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-4 py-2 rounded-lg font-medium capitalize whitespace-nowrap transition-colors ${activeTab === tab
+                            className={`px-4 py-2 rounded-lg font-medium capitalize whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === tab
                                 ? 'bg-green-600 text-white'
                                 : 'bg-white text-gray-600 hover:bg-gray-100'
                                 }`}
                         >
-                            {tab === 'chat' ? '💬 Clinical Chat' : tab === 'analytics' ? '📊 Analytics' : '📅 Appointments'}
+                            {tab === 'chat' ? '💬 Clinical Chat'
+                                : tab === 'analytics' ? '📊 Analytics'
+                                    : tab === 'pending-soaps' ? (
+                                        <>
+                                            📋 Pending SOAPs
+                                            {pendingSOAPs.length > 0 && (
+                                                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                                    {pendingSOAPs.length}
+                                                </span>
+                                            )}
+                                        </>
+                                    )
+                                        : '📅 Appointments'}
                         </button>
                     ))}
                 </div>
@@ -282,6 +354,133 @@ export default function DoctorDashboardNew() {
                                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
                                     <span className="text-4xl mb-4 block">👈</span>
                                     <p className="text-gray-500">Select a patient to view details</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Pending SOAPs Tab */}
+                {activeTab === 'pending-soaps' && (
+                    <div className="grid lg:grid-cols-2 gap-6">
+                        {/* SOAP List */}
+                        <div className="space-y-4">
+                            <h2 className="text-lg font-semibold text-gray-900">
+                                Pending SOAP Reviews ({pendingSOAPs.length})
+                            </h2>
+                            {pendingSOAPs.length === 0 ? (
+                                <div className="bg-white rounded-xl p-8 text-center">
+                                    <span className="text-4xl mb-4 block">✅</span>
+                                    <p className="text-gray-500">No pending SOAPs to review</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {pendingSOAPs.map((soap) => (
+                                        <div
+                                            key={soap.id}
+                                            onClick={() => handleSelectSOAP(soap)}
+                                            className={`bg-white rounded-xl p-4 shadow-sm border-2 cursor-pointer transition-all ${selectedSOAP?.id === soap.id
+                                                ? 'border-green-500'
+                                                : 'border-transparent hover:border-gray-200'
+                                                }`}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`w-2 h-2 rounded-full mt-2 ${getPriorityColor(soap.triage?.priority || 'green')}`}></div>
+                                                    <div>
+                                                        <h3 className="font-semibold text-gray-900">
+                                                            Patient: {soap.patient_id}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-500">
+                                                            Source: {soap.source} • {new Date(soap.created_at).toLocaleDateString()}
+                                                        </p>
+                                                        {soap.symptoms && soap.symptoms.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-2">
+                                                                {soap.symptoms.slice(0, 3).map((sym, i) => (
+                                                                    <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+                                                                        {sym}
+                                                                    </span>
+                                                                ))}
+                                                                {soap.symptoms.length > 3 && (
+                                                                    <span className="text-xs text-gray-500">
+                                                                        +{soap.symptoms.length - 3} more
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">
+                                                    Pending Review
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* SOAP Editor Panel */}
+                        <div>
+                            {selectedSOAP && editingSOAP ? (
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-4">
+                                    <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                                        <h2 className="font-semibold text-gray-900">Review & Edit SOAP</h2>
+                                        {selectedSOAP.triage && (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-3 h-3 rounded-full ${getPriorityColor(selectedSOAP.triage?.priority || 'green')}`}></span>
+                                                <span className="text-sm text-gray-600 capitalize">
+                                                    {selectedSOAP.triage?.priority || 'Normal'} Priority
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                                        {['subjective', 'objective', 'assessment', 'plan'].map((section) => (
+                                            <div key={section}>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
+                                                    {section}
+                                                </label>
+                                                <textarea
+                                                    value={editingSOAP[section] || ''}
+                                                    onChange={(e) => setEditingSOAP(prev => ({
+                                                        ...prev,
+                                                        [section]: e.target.value
+                                                    }))}
+                                                    rows={section === 'plan' ? 5 : 3}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                                                    placeholder={`Enter ${section}...`}
+                                                />
+                                            </div>
+                                        ))}
+
+                                        <div className="pt-4 border-t border-gray-100 flex gap-3">
+                                            <button
+                                                onClick={handleSaveSOAP}
+                                                disabled={saving}
+                                                className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
+                                            >
+                                                {saving ? 'Saving...' : '✓ Finalize SOAP'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedSOAP(null);
+                                                    setEditingSOAP(null);
+                                                }}
+                                                className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                                    <span className="text-4xl mb-4 block">📋</span>
+                                    <p className="text-gray-500">Select a SOAP to review and edit</p>
+                                    <p className="text-sm text-gray-400 mt-2">
+                                        Draft SOAPs from patient intake sessions will appear here
+                                    </p>
                                 </div>
                             )}
                         </div>

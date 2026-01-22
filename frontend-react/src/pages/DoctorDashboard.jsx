@@ -113,10 +113,10 @@ export default function DoctorDashboard() {
 
         setIsLoading(true);
         try {
-            await encounterAPI.update(
-                selectedSession.session_id,
-                editedSoap
-            );
+            await intakeAPI.updateSession(selectedSession.session_id, {
+                preliminary_soap: editedSoap,
+                final_soap: editedSoap
+            });
             toast.success('SOAP note saved');
             await validateSoap();
         } catch (error) {

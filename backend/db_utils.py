@@ -49,15 +49,22 @@ def fetch_similar_notes(query_emb, top_k=3):
         return []
     
     try:
-        # Convert numpy list to Postgres vector string
-        query_vector = str(list(query_emb))
-        sql = f"""
-        select *, 1 - (embedding <#> '{query_vector}') as similarity
-        from clinical_notes
-        order by similarity desc
-        limit {top_k};
-        """
-        result = supabase.rpc("sql", {"query": sql}).execute()
+        # Try using the match_notes RPC function if it exists
+        try:
+            result = supabase.rpc(
+                "match_notes",
+                {
+                    "query_embedding": list(query_emb),
+                    "match_count": top_k
+                }
+            ).execute()
+            if result.data:
+                return result.data
+        except Exception as rpc_error:
+            print(f"[WARNING] RPC function not available: {rpc_error}")
+        
+        # Fallback: Get most recent notes if vector search not available
+        result = supabase.table("clinical_notes").select("*").order("id", desc=True).limit(top_k).execute()
         return result.data if result.data else []
     except Exception as e:
         print(f"[ERROR] Error fetching similar notes: {e}")

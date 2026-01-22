@@ -40,6 +40,7 @@ class IntakeSession:
     triage_priority: Optional[TriagePriority] = None
     triage_score: int = 5
     preliminary_soap: Optional[Dict] = None
+    final_soap: Optional[Dict] = None
     suggested_specialties: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 

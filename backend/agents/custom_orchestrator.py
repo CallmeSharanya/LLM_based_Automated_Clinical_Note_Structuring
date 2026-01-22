@@ -1,5 +1,5 @@
 """
-Custom Agent Orchestrator - Replaces CrewAI with 100% Free Gemini-based agents
+Custom Agent Orchestrator - Uses Groq as primary LLM (free tier) with Gemini fallback
 No OpenAI dependency required!
 """
 
@@ -7,13 +7,28 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 import json
-import google.generativeai as genai
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Try to import Groq (primary LLM)
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("⚠️ Groq not installed for orchestrator.")
+
+# Try to import Gemini (fallback)
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️ Gemini not installed for orchestrator.")
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 class AgentType(Enum):
     STRUCTURING = "structuring"
@@ -32,54 +47,80 @@ class AgentResult:
 import time
 
 class GeminiAgent:
-    """Base agent class using Gemini LLM"""
+    """Base agent class using Groq as primary LLM with Gemini fallback"""
     
     def __init__(self, name: str, role: str, goal: str, model: str = "gemini-2.5-flash"):
         self.name = name
         self.role = role
         self.goal = goal
         self.model_name = model
-        self.model = genai.GenerativeModel(model)
+        self.groq_model = "llama-3.3-70b-versatile"
+        
+        # Initialize Groq client
+        if GROQ_AVAILABLE and GROQ_API_KEY:
+            self.groq_client = Groq(api_key=GROQ_API_KEY)
+        else:
+            self.groq_client = None
+            
+        # Initialize Gemini as fallback
+        if GEMINI_AVAILABLE:
+            self.model = genai.GenerativeModel(model)
+        else:
+            self.model = None
     
     def run(self, prompt: str) -> str:
-        """Execute a prompt and return response with 429 rate limit handling and 404 fallback"""
-        retries = 3
-        base_delay = 15  # 15 seconds wait for rate limits (Free tier is 5 RPM = ~12s per req)
-
-        for attempt in range(retries):
-            try:
-                # Add a small delay for rate limiting on every call
-                if attempt == 0:
-                    time.sleep(2) 
-                    
-                response = self.model.generate_content(prompt)
-                return response.text.strip()
-                
-            except Exception as e:
-                error_msg = str(e).lower()
-                
-                # Handle Rate Limit (429)
-                if "429" in error_msg or "quota" in error_msg:
-                    wait_time = base_delay * (attempt + 1)
-                    print(f"⚠️ Quota exceeded (429). Retrying in {wait_time}s... (Attempt {attempt+1}/{retries})")
-                    time.sleep(wait_time)
-                    continue
-                
-                # Handle Model Not Found (404)
-                if "404" in error_msg or "not found" in error_msg:
-                    print(f"⚠️ Model '{self.model_name}' not found. Falling back to 'gemini-pro'...")
-                    try:
-                        fallback = genai.GenerativeModel("gemini-pro")
-                        response = fallback.generate_content(prompt)
-                        return response.text.strip()
-                    except Exception as e2:
-                        return f"Error (Fallback failed): {str(e2)}"
-                
-                # Other errors
-                print(f"Error with model {self.model_name}: {e}")
-                return f"Error: {str(e)}"
+        """Execute a prompt - try Groq first, fallback to Gemini"""
         
-        return "Error: Max retries exceeded due to rate limits."
+        # Try Groq first (primary)
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=4096,
+                    temperature=0.3
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                print(f"⚠️ Groq error in {self.name}: {e}")
+                # Fall through to Gemini
+        
+        # Fallback to Gemini
+        if self.model:
+            retries = 3
+            base_delay = 15
+
+            for attempt in range(retries):
+                try:
+                    if attempt == 0:
+                        time.sleep(2) 
+                        
+                    response = self.model.generate_content(prompt)
+                    return response.text.strip()
+                    
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    
+                    if "429" in error_msg or "quota" in error_msg:
+                        wait_time = base_delay * (attempt + 1)
+                        print(f"⚠️ Gemini quota exceeded. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    if "404" in error_msg or "not found" in error_msg:
+                        try:
+                            fallback = genai.GenerativeModel("gemini-pro")
+                            response = fallback.generate_content(prompt)
+                            return response.text.strip()
+                        except Exception as e2:
+                            return f"Error (Fallback failed): {str(e2)}"
+                    
+                    print(f"Error with Gemini: {e}")
+                    return f"Error: {str(e)}"
+            
+            return "Error: Max retries exceeded due to rate limits."
+        
+        return "Error: No LLM available (neither Groq nor Gemini configured)"
 
 class StructuringAgent(GeminiAgent):
     """Agent for SOAP structuring with multi-step extraction"""
@@ -231,15 +272,16 @@ class ChatAgent(GeminiAgent):
     def answer_query(self, query: str, context_notes: List[Dict]) -> Dict[str, Any]:
         """Answer a query using similar notes as context"""
         
-        context = "\n\n".join([
-            f"--- Note {i+1} ---\n"
-            f"Assessment: {note.get('assessment', 'N/A')}\n"
-            f"Plan: {note.get('plan', 'N/A')}\n"
-            f"Subjective: {note.get('subjective', 'N/A')}"
-            for i, note in enumerate(context_notes[:5])
-        ])
-        
-        prompt = f"""You are a clinical assistant helping healthcare providers.
+        if context_notes:
+            context = "\n\n".join([
+                f"--- Note {i+1} ---\n"
+                f"Assessment: {note.get('assessment', 'N/A')}\n"
+                f"Plan: {note.get('plan', 'N/A')}\n"
+                f"Subjective: {note.get('subjective', 'N/A')}"
+                for i, note in enumerate(context_notes[:5])
+            ])
+            
+            prompt = f"""You are a clinical assistant helping healthcare providers.
 Use the context from similar patient notes to answer the query.
 
 SIMILAR CLINICAL NOTES:
@@ -256,12 +298,28 @@ INSTRUCTIONS:
 5. Always maintain patient confidentiality
 
 ANSWER:"""
+        else:
+            # No context available - answer based on general clinical knowledge
+            prompt = f"""You are a clinical assistant helping healthcare providers.
+Answer the following clinical query using your general medical knowledge.
+
+USER QUERY:
+{query}
+
+INSTRUCTIONS:
+1. Provide helpful, clinically accurate information
+2. Be specific and practical
+3. If you're unsure, recommend consulting appropriate resources
+4. Maintain professional medical standards
+5. Always maintain patient confidentiality
+
+ANSWER:"""
 
         response = self.run(prompt)
         
         return {
             "answer": response,
-            "sources_used": len(context_notes),
+            "sources_used": len(context_notes) if context_notes else 0,
             "query": query
         }
 
