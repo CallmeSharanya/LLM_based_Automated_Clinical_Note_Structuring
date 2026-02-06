@@ -1,0 +1,53 @@
+RADIOLOGY REPORT
+================
+
+Patient Name: Jane Doe
+DOB: 05/15/1990
+MRN: 12345678
+Exam Date: 01/25/2026
+Ordering Physician: Dr. Priya Sharma
+
+EXAMINATION: CT SCAN OF THE HEAD WITHOUT CONTRAST
+
+CLINICAL INDICATION:
+Recurrent headaches, evaluate for intracranial pathology
+
+TECHNIQUE:
+Helical CT of the head was performed without intravenous contrast. 
+Axial images were obtained from the skull base to the vertex at 5mm intervals.
+Sagittal and coronal reformats were generated.
+
+COMPARISON: 
+No prior imaging available for comparison.
+
+FINDINGS:
+
+BRAIN PARENCHYMA:
+- No evidence of acute intracranial hemorrhage
+- No mass lesion or midline shift
+- Gray-white matter differentiation is preserved
+- No evidence of acute infarct
+- Ventricles are normal in size and configuration
+- Basal cisterns are patent
+
+CALVARIUM AND SKULL BASE:
+- Calvarium appears intact without fracture
+- Paranasal sinuses: Mild mucosal thickening in the maxillary sinuses bilaterally
+- Mastoid air cells are well aerated
+
+ORBITS:
+- Globes and extraocular muscles appear unremarkable
+- No retrobulbar abnormality
+
+IMPRESSION:
+1. No acute intracranial abnormality identified
+2. Mild bilateral maxillary sinusitis
+3. Consider clinical correlation for headache symptoms
+
+RECOMMENDATIONS:
+- If symptoms persist, consider MRI brain with and without contrast for further evaluation
+- ENT referral may be considered for sinus disease if symptomatic
+
+Dictated by: Dr. Rahul Krishnan, MD
+Radiology Department
+Report finalized: 01/25/2026 14:32

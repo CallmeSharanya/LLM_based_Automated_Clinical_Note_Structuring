@@ -1,0 +1,55 @@
+PRESCRIPTION
+============
+
+Rx #: 2026012801
+Date: January 28, 2026
+
+Patient: Jane Doe
+DOB: 05/15/1990
+Address: 123 Main Street, Mumbai, Maharashtra
+
+-----------------------------------------------
+
+Rx
+
+1. METFORMIN 500mg tablets
+   SIG: Take one tablet by mouth twice daily with meals
+   QTY: 60 tablets
+   Refills: 5
+
+2. LISINOPRIL 10mg tablets
+   SIG: Take one tablet by mouth once daily
+   QTY: 30 tablets
+   Refills: 3
+
+3. ATORVASTATIN 20mg tablets
+   SIG: Take one tablet by mouth at bedtime
+   QTY: 30 tablets
+   Refills: 3
+
+4. OMEPRAZOLE 20mg capsules
+   SIG: Take one capsule by mouth 30 minutes before breakfast
+   QTY: 30 capsules
+   Refills: 2
+
+-----------------------------------------------
+
+INSTRUCTIONS:
+- Take medications as directed
+- Do not stop medications without consulting doctor
+- Monitor blood sugar if diabetic
+- Report any muscle pain while on atorvastatin
+- Avoid grapefruit juice with atorvastatin
+
+ALLERGIES: PENICILLIN (causes rash)
+
+-----------------------------------------------
+
+Prescriber: Dr. Ananya Patel, MBBS, MD
+Medical License #: MH-12345
+DEA #: AP1234567
+Clinic: HealthPlus Medical Center
+Phone: +91 98765-43210
+
+Signature: _________________________
+           (Digital Signature on File)

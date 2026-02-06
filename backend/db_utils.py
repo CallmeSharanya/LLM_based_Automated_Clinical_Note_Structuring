@@ -63,9 +63,32 @@ def fetch_similar_notes(query_emb, top_k=3):
         except Exception as rpc_error:
             print(f"[WARNING] RPC function not available: {rpc_error}")
         
-        # Fallback: Get most recent notes if vector search not available
-        result = supabase.table("clinical_notes").select("*").order("id", desc=True).limit(top_k).execute()
-        return result.data if result.data else []
+        # Fallback: Get most recent entries from ENCOUNTERS table
+        # We query 'encounters' because that's where the app saves data now.
+        result = supabase.table("encounters").select("*").order("updated_at", desc=True).limit(top_k).execute()
+        
+        
+        notes = []
+        if result.data:
+            for item in result.data:
+                # Normalize structure for RAG
+                soap = item.get("final_soap", {})
+                if isinstance(soap, str):
+                    try:
+                        soap = json.loads(soap)
+                    except:
+                        soap = {}
+                
+                notes.append({
+                    "subjective": soap.get("Subjective"),
+                    "objective": soap.get("Objective"),
+                    "assessment": soap.get("Assessment"),
+                    "plan": soap.get("Plan"),
+                    "raw_text": json.dumps(soap), # Keep raw text just in case
+                    "created_at": item.get("completed_at"),
+                    "patient_id": item.get("patient_id")
+                })
+        return notes
     except Exception as e:
         print(f"[ERROR] Error fetching similar notes: {e}")
         return []
@@ -78,8 +101,51 @@ def get_all_notes():
         return []
     
     try:
-        result = supabase.table("clinical_notes").select("*").execute()
+        # Query encounters table
+        result = supabase.table("encounters").select("*").execute()
         return result.data if result.data else []
     except Exception as e:
         print(f"[ERROR] Error fetching all notes: {e}")
         return []
+
+
+def upsert_encounter(encounter_data: dict):
+    """
+    Insert or update an encounter record in the database.
+    This is used to persist finalized SOAP notes and ICD codes.
+    """
+    if not supabase:
+        print("[ERROR] Cannot upsert encounter: Supabase not configured")
+        return {"error": "Database not configured"}
+    
+    try:
+        # If encounter_id is provided, try to update
+        if encounter_data.get("id"):
+            response = supabase.table("encounters").update(encounter_data).eq("id", encounter_data["id"]).execute()
+            if response.data:
+                return {"success": True, "data": response.data[0]}
+        
+        # If intake_session_id is provided, try to find one to update
+        if encounter_data.get("intake_session_id"):
+            existing = supabase.table("encounters").select("id").eq("intake_session_id", encounter_data["intake_session_id"]).execute()
+            if existing.data:
+                # Update existing using the found ID
+                enc_id = existing.data[0]["id"]
+                response = supabase.table("encounters").update(encounter_data).eq("id", enc_id).execute()
+                if response.data:
+                    return {"success": True, "data": response.data[0]}
+            
+        # If we reached here, we need to insert a new record
+        # But first, ensure we don't insert None for optional fields if not provided
+        
+        filtered_data = {k: v for k, v in encounter_data.items() if v is not None}
+        response = supabase.table("encounters").insert(filtered_data).execute()
+            
+        if response.data:
+            return {"success": True, "data": response.data[0]}
+        else:
+            return {"success": False, "error": "No data returned from database"}
+            
+    except Exception as e:
+        print(f"[ERROR] Error upserting encounter: {e}")
+        return {"success": False, "error": str(e)}

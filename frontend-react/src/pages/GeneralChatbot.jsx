@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { chatAPI, analyticsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const SUGGESTED_QUERIES = [
+const DOCTOR_QUERIES = [
     "What are the most common diagnoses this month?",
     "Show me disease trends in our database",
     "What are the typical treatments for Type 2 Diabetes?",
@@ -24,6 +24,17 @@ const SUGGESTED_QUERIES = [
     "Analyze patient demographics",
     "Show SOAP structuring efficiency metrics",
     "What are the common comorbidities with COVID-19?",
+];
+
+const PATIENT_QUERIES = [
+    "I have a fever and headache for 2 days",
+    "My throat is sore and I have difficulty swallowing",
+    "I've been having chest pain when I breathe deeply",
+    "I feel dizzy and lightheaded frequently",
+    "I have lower back pain that won't go away",
+    "My blood sugar levels have been high lately",
+    "I'm experiencing shortness of breath during exercise",
+    "I have a persistent cough for over a week",
 ];
 
 export default function GeneralChatbot({ userType = 'doctor' }) {
@@ -149,7 +160,7 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
                                 : 'bg-white border border-gray-200 text-gray-800 shadow-sm'
                     )}>
                         <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {message.content}
+                            {message.content.replace(/\*\*/g, '').replace(/\*/g, '')}
                         </div>
                     </div>
 
@@ -221,20 +232,28 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${userType === 'patient'
+                            ? 'bg-gradient-to-br from-green-500 to-teal-500'
+                            : 'bg-gradient-to-br from-purple-500 to-pink-500'
+                            }`}>
                             <SparklesIcon className="w-6 h-6 text-white" />
                         </div>
-                        Clinical AI Assistant
+                        {userType === 'patient' ? 'Health Assistant' : 'Clinical AI Assistant'}
                     </h1>
                     <p className="text-gray-600 mt-1">
-                        Query the SOAP database for insights, trends, and clinical information
+                        {userType === 'patient'
+                            ? 'Describe your symptoms and get health guidance'
+                            : 'Query the SOAP database for insights, trends, and clinical information'
+                        }
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={loadStats} className="btn-secondary flex items-center gap-2">
-                        <ArrowPathIcon className="w-4 h-4" />
-                        Refresh Data
-                    </button>
+                    {userType !== 'patient' && (
+                        <button onClick={loadStats} className="btn-secondary flex items-center gap-2">
+                            <ArrowPathIcon className="w-4 h-4" />
+                            Refresh Data
+                        </button>
+                    )}
                     {messages.length > 0 && (
                         <button onClick={clearChat} className="btn-secondary">
                             Clear Chat
@@ -243,8 +262,8 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
                 </div>
             </div>
 
-            {/* Stats Bar */}
-            {stats && (
+            {/* Stats Bar - Only for doctor/hospital */}
+            {stats && userType !== 'patient' && (
                 <div className="grid grid-cols-4 gap-4 mb-6">
                     <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                         <div className="flex items-center gap-3">
@@ -308,11 +327,13 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
                                 <SparklesIcon className="w-10 h-10 text-white" />
                             </div>
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                                Clinical AI Assistant
+                                {userType === 'patient' ? 'Health Assistant' : 'Clinical AI Assistant'}
                             </h2>
                             <p className="text-gray-600 max-w-md mx-auto mb-8">
-                                Ask me anything about disease trends, treatment patterns, or clinical insights
-                                from the SOAP database. I can help analyze data and provide actionable information.
+                                {userType === 'patient'
+                                    ? "Tell me about your symptoms and I'll help you understand them and find the right care. I can also answer general health questions."
+                                    : 'Ask me anything about disease trends, treatment patterns, or clinical insights from the SOAP database. I can help analyze data and provide actionable information.'
+                                }
                             </p>
 
                             {/* Suggested Queries */}
@@ -323,7 +344,7 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
                                         Try asking:
                                     </p>
                                     <div className="grid grid-cols-2 gap-3">
-                                        {SUGGESTED_QUERIES.slice(0, 6).map((query, index) => (
+                                        {(userType === 'patient' ? PATIENT_QUERIES : DOCTOR_QUERIES).slice(0, 6).map((query, index) => (
                                             <button
                                                 key={index}
                                                 onClick={() => sendMessage(query)}
@@ -361,7 +382,9 @@ export default function GeneralChatbot({ userType = 'doctor' }) {
                                         <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
                                         <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
                                     </div>
-                                    <span className="text-sm text-gray-500">Analyzing SOAP database...</span>
+                                    <span className="text-sm text-gray-500">
+                                        {userType === 'patient' ? 'Thinking...' : 'Analyzing clinical data...'}
+                                    </span>
                                 </div>
                             </div>
                         </motion.div>

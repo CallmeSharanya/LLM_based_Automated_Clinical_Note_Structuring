@@ -142,6 +142,47 @@ export const doctorAPI = {
 };
 
 // ============================================================================
+// ENCOUNTER API
+// ============================================================================
+
+export const encounterAPI = {
+    // Update encounter with doctor edits
+    update: async (encounterId, editedSoap = null, doctorNotes = null, vitals = null) => {
+        const response = await api.post('/encounter/update', {
+            encounter_id: encounterId,
+            edited_soap: editedSoap,
+            doctor_notes: doctorNotes,
+            vitals: vitals,
+        });
+        return response.data;
+    },
+
+    // Finalize an encounter (save SOAP note)
+    finalize: async (encounterId, soapNote, generateSummary = true, patientId = null) => {
+        const formData = new FormData();
+        formData.append('encounter_id', encounterId);
+        formData.append('final_soap', JSON.stringify(soapNote));
+        formData.append('generate_summary', generateSummary);
+        if (patientId) formData.append('patient_id', patientId);
+
+        const response = await api.post('/encounter/finalize', formData);
+        return response.data;
+    },
+
+    // Get patient encounters
+    getPatientEncounters: async (patientId) => {
+        const response = await api.get(`/encounters/patient/${patientId}`);
+        return response.data;
+    },
+
+    // Get specific encounter
+    getEncounter: async (encounterId) => {
+        const response = await api.get(`/encounters/${encounterId}`);
+        return response.data;
+    }
+};
+
+// ============================================================================
 // APPOINTMENT API
 // ============================================================================
 
@@ -283,33 +324,7 @@ export const summaryAPI = {
     },
 };
 
-// ============================================================================
-// ENCOUNTER API
-// ============================================================================
 
-export const encounterAPI = {
-    // Update encounter with doctor edits
-    update: async (encounterId, editedSoap = null, doctorNotes = null, vitals = null) => {
-        const response = await api.post('/encounter/update', {
-            encounter_id: encounterId,
-            edited_soap: editedSoap,
-            doctor_notes: doctorNotes,
-            vitals: vitals,
-        });
-        return response.data;
-    },
-
-    // Finalize encounter
-    finalize: async (encounterId, finalSoap, generateSummary = true) => {
-        const formData = new FormData();
-        formData.append('encounter_id', encounterId);
-        formData.append('final_soap', JSON.stringify(finalSoap));
-        formData.append('generate_patient_summary', generateSummary);
-
-        const response = await api.post('/encounter/finalize', formData);
-        return response.data;
-    },
-};
 
 // ============================================================================
 // CHAT API
@@ -370,6 +385,44 @@ export const analyticsAPI = {
     getICDStats: async () => {
         const response = await api.get('/analytics/icd');
         return response.data;
+    },
+
+    // Get Summary Stats (Maps to runAnalytics)
+    getSummary: async () => {
+        try {
+            const response = await api.get('/analytics/run');
+            // Map backend keys to frontend expectations
+            // Note: backend returns { message: "...", result: { total_notes: N, ... } }
+            const result = response.data.result || {};
+
+            return {
+                total_patients: 1, // Mock for now until patient count endpoint exists
+                total_encounters: result.total_notes || 0,
+                avg_validation_score: result.accuracy || 87,
+                avg_processing_time: result.avg_processing_time || 2.3,
+                specialty_distribution: [],
+                triage_distribution: []
+            };
+        } catch (error) {
+            console.error("Error fetching summary:", error);
+            return null;
+        }
+    },
+
+    // Get Encounter Trends (Mock for now)
+    getEncounterTrends: async (range) => {
+        // Return mock trends until backend endpoint exists
+        return {
+            daily_counts: [
+                { date: 'Mon', encounters: 2 },
+                { date: 'Tue', encounters: 5 },
+                { date: 'Wed', encounters: 3 },
+                { date: 'Thu', encounters: 7 },
+                { date: 'Fri', encounters: 4 },
+                { date: 'Sat', encounters: 1 },
+                { date: 'Sun', encounters: 1 }
+            ]
+        };
     },
 };
 

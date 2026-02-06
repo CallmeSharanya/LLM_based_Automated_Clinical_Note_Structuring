@@ -102,6 +102,7 @@ export default function SOAPEditor() {
     const handleUploadComplete = (result) => {
         if (result.draft_soap) {
             setDraftSoap(result.draft_soap);
+            setEditedSoap(result.draft_soap); // Fix: Set editedSoap code so buttons work
             setActiveTab('editor');
             toast.success('Draft SOAP generated from uploaded documents');
         }
@@ -168,26 +169,32 @@ export default function SOAPEditor() {
 
         // Validate first if not already validated
         if (!validation || validation.status !== 'VALID') {
-            toast.error('Please validate the SOAP note first');
-            await validateSoap();
-            return;
+            const confirmSave = window.confirm("Validation issues found (" + (validation?.status || "Unknown") + "). Save anyway?");
+            if (!confirmSave) return;
         }
 
         setIsFinalizing(true);
+        // DEBUG: Alert to confirm click
+        window.alert("Starting Save Process...");
         try {
+            console.log("Saving SOAP...", { editedSoap, user, patientInfo });
             const result = await encounterAPI.finalize(
                 patientInfo?.encounter_id || `enc_${Date.now()}`,
                 editedSoap,
-                true // Generate patient summary
+                true, // Generate patient summary
+                user?.id || patientInfo?.id // Pass patient ID for DB linking
             );
 
+            console.log("Save Result:", result);
+            window.alert("Save Successful! Server said: " + JSON.stringify(result));
             toast.success('SOAP note saved to database!');
 
             // Navigate back or show confirmation
             navigate('/doctor/patients');
         } catch (error) {
-            toast.error('Failed to save SOAP note');
             console.error(error);
+            window.alert("Save FAILED: " + error.message);
+            toast.error('Failed to save SOAP note');
         } finally {
             setIsFinalizing(false);
         }
@@ -241,8 +248,11 @@ export default function SOAPEditor() {
                             </button>
                             <button
                                 onClick={finalizeSoap}
-                                disabled={isFinalizing || !validation || validation.status !== 'VALID'}
-                                className="btn-primary flex items-center gap-2"
+                                disabled={isFinalizing}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isFinalizing
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'
+                                    }`}
                             >
                                 {isFinalizing ? (
                                     <ArrowPathIcon className="w-5 h-5 animate-spin" />
@@ -325,7 +335,11 @@ export default function SOAPEditor() {
                                             ? 'bg-emerald-600 text-white'
                                             : 'bg-gray-100 text-gray-900'
                                     )}>
-                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        <p className="text-sm whitespace-pre-wrap">
+                                            {typeof msg.content === 'object'
+                                                ? JSON.stringify(msg.content, null, 2)
+                                                : msg.content}
+                                        </p>
                                     </div>
                                 </motion.div>
                             ))}
@@ -432,11 +446,17 @@ export default function SOAPEditor() {
                                         {section}
                                     </label>
                                     <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">
-                                        {draftSoap[section] || (
-                                            <span className="text-gray-400 italic">
-                                                Continue the conversation to generate this section...
-                                            </span>
-                                        )}
+                                        {(() => {
+                                            const content = draftSoap[section];
+                                            if (!content) return (
+                                                <span className="text-gray-400 italic">
+                                                    Continue the conversation to generate this section...
+                                                </span>
+                                            );
+                                            return typeof content === 'object'
+                                                ? JSON.stringify(content, null, 2)
+                                                : content;
+                                        })()}
                                     </p>
                                 </div>
                             ))}

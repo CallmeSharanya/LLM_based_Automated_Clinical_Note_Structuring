@@ -7,13 +7,26 @@ import os
 import uuid
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
 
 from fastapi import HTTPException, Depends, Header
 from pydantic import BaseModel, EmailStr
+
+
+def calculate_age(date_of_birth: str) -> Optional[int]:
+    """Calculate age from date of birth string (YYYY-MM-DD format)"""
+    if not date_of_birth:
+        return None
+    try:
+        dob = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
+        today = date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        return age
+    except (ValueError, TypeError):
+        return None
 
 # In production, use a proper database. For demo, using in-memory storage.
 
@@ -158,8 +171,11 @@ class AuthManager:
                 from supabase_client import get_supabase_client
                 supabase = get_supabase_client()
                 
-                # Query doctor by ID (UUID)
-                response = supabase.table("doctors").select("*").eq("id", user_id).execute()
+                # Query doctor by email first, then by ID (UUID)
+                response = supabase.table("doctors").select("*").eq("email", user_id).execute()
+                if not response.data:
+                    # Try by ID if email didn't match
+                    response = supabase.table("doctors").select("*").eq("id", user_id).execute()
                 
                 if response.data and len(response.data) > 0:
                     doctor = response.data[0]
@@ -174,7 +190,7 @@ class AuthManager:
                         return {
                             "success": True,
                             "user": {
-                                "id": user_id,
+                                "id": doctor.get("id"),  # Use database UUID, not login email
                                 "email": doctor.get("email", ""),
                                 "name": doctor.get("name"),
                                 "role": "doctor",
@@ -218,6 +234,10 @@ class AuthManager:
                         patient_id = f"patient-{patient.get('email', '')}"
                         self.tokens[token] = patient_id
                         
+                        # Calculate age from date_of_birth
+                        dob_str = patient.get("date_of_birth")
+                        patient_age = calculate_age(str(dob_str) if dob_str else None)
+                        
                         return {
                             "success": True,
                             "user": {
@@ -228,6 +248,7 @@ class AuthManager:
                                 "phone": patient.get("phone"),
                                 "token": token,
                                 "date_of_birth": patient.get("date_of_birth"),
+                                "age": patient_age,
                                 "gender": patient.get("gender"),
                                 "blood_group": patient.get("blood_group"),
                                 "allergies": patient.get("allergies", []),
@@ -327,16 +348,18 @@ class AuthManager:
             supabase = get_supabase_client()
             
             # Prepare patient data for Supabase
+            patient_email = data.email or f"{data.phone}@temp.ehr"
             patient_data = {
-                "email": data.email or f"{data.phone}@temp.ehr",
+                "patient_id": patient_email,  # Required unique identifier
+                "email": patient_email,
                 "name": data.name,
                 "phone": data.phone,
                 "password_hash": self._hash_password(data.password),  # Store hashed password for login
                 "date_of_birth": data.date_of_birth,
                 "gender": data.gender,
                 "blood_group": data.blood_group,
-                "address": data.address.get("full", "") if isinstance(data.address, dict) else (data.address or ""),
-                "emergency_contact": data.emergency_contact.get("phone", "") if isinstance(data.emergency_contact, dict) else "",
+                "address": {"full": data.address.get("full", "") if isinstance(data.address, dict) else (data.address or "")} if data.address else None,
+                "emergency_contact": {"phone": data.emergency_contact.get("phone", "")} if isinstance(data.emergency_contact, dict) else None,
                 "allergies": data.allergies or [],
                 "chronic_conditions": data.chronic_conditions or [],
                 "current_medications": data.current_medications or []
@@ -355,6 +378,9 @@ class AuthManager:
         self.tokens[token] = user.id
         user.token = token
         
+        # Calculate age from date_of_birth
+        patient_age = calculate_age(data.date_of_birth)
+        
         return {
             "success": True,
             "user": {
@@ -364,6 +390,7 @@ class AuthManager:
                 "role": user.role.value,
                 "phone": user.phone,
                 "token": token,
+                "age": patient_age,
                 **user.profile,
             },
             "message": "Registration successful"

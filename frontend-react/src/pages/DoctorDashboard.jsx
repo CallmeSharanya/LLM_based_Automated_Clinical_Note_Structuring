@@ -44,15 +44,14 @@ export default function DoctorDashboard() {
         if (!user?.id) return;
 
         try {
-            // Get today's date in YYYY-MM-DD format
-            const today = new Date().toISOString().split('T')[0];
-            const response = await appointmentAPI.getDoctorAppointments(user.id, today);
+            // Load all upcoming appointments (no date filter)
+            const response = await appointmentAPI.getDoctorAppointments(user.id);
 
             if (response.success) {
                 setTodaySchedule(response.appointments || []);
             }
         } catch (error) {
-            console.error('Failed to load today\'s schedule:', error);
+            console.error('Failed to load schedule:', error);
         }
     };
 
@@ -166,8 +165,8 @@ export default function DoctorDashboard() {
             <section className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Today's Schedule</h2>
-                        <p className="text-gray-600">Your appointments for today</p>
+                        <h2 className="text-2xl font-bold text-gray-900">Upcoming Appointments</h2>
+                        <p className="text-gray-600">Your scheduled appointments</p>
                     </div>
                     <button onClick={loadTodaySchedule} className="btn-secondary text-sm">
                         Refresh

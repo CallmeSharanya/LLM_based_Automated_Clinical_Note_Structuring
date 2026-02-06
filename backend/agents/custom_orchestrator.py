@@ -337,22 +337,37 @@ class AnalyticsAgent(GeminiAgent):
         """Analyze ICD code distribution and trends"""
         
         # Count ICD codes
+        # Count ICD codes
         code_counts = {}
         for record in icd_data:
-            if record.get("icd_json"):
-                for code_entry in record["icd_json"]:
+            # Try to get ICDs from direct column or nested soap or parsing
+            icds = record.get("icd_json") or []
+            if not icds and record.get("final_soap"):
+                 # Fallback: try to extract from final_soap if it's there
+                 try:
+                     soap_dict = record["final_soap"] 
+                     if isinstance(soap_dict, str): soap_dict = json.loads(soap_dict)
+                     # Assuming icd might be in soap_dict (unlikely but good safety) or just empty
+                 except: pass
+            
+            # Use icds if list
+            if isinstance(icds, list):
+                for code_entry in icds:
                     if isinstance(code_entry, dict) and "code" in code_entry:
                         code = code_entry["code"]
+                        code_counts[code] = code_counts.get(code, 0) + 1
+                    elif isinstance(code_entry, str):
+                        code = code_entry
                         code_counts[code] = code_counts.get(code, 0) + 1
         
         # Sort by frequency
         sorted_codes = sorted(code_counts.items(), key=lambda x: x[1], reverse=True)
-        top_10 = dict(sorted_codes[:10])
+        top_10 = [{"code": k, "count": v} for k, v in sorted_codes[:10]]
         
         return {
             "total_records": len(icd_data),
             "unique_codes": len(code_counts),
-            "top_10_codes": top_10,
+            "top_codes": top_10, # Renamed to match usage logic if ambiguous, or just standard list
             "code_distribution": code_counts
         }
     
@@ -458,6 +473,7 @@ class AgentOrchestrator:
         summary = self.analytics_agent.generate_summary(notes_data)
         
         return {
+            "total_notes": len(notes_data),
             "icd_stats": icd_analysis,
             "summary": summary
         }

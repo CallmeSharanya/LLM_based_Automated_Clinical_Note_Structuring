@@ -17,7 +17,9 @@ import PatientSignup from './pages/PatientSignup';
 import PatientHome from './pages/PatientHome';
 import PatientIntake from './pages/PatientIntake';
 import PatientPortal from './pages/PatientPortal';
+import PatientRecords from './pages/PatientRecords';
 import PatientUpload from './pages/PatientUpload';
+import HealthSummary from './pages/HealthSummary';
 
 // Doctor Pages
 import DoctorDashboardNew from './pages/DoctorDashboardNew';
@@ -60,10 +62,10 @@ function App() {
                     <Route index element={<Navigate to="/patient/home" replace />} />
                     <Route path="home" element={<PatientHome />} />
                     <Route path="intake" element={<PatientIntake />} />
-                    <Route path="records" element={<PatientPortal />} />
+                    <Route path="records" element={<PatientRecords />} />
                     <Route path="upload" element={<PatientUpload />} />
-                    <Route path="chat" element={<ClinicalChat />} />
-                    <Route path="health" element={<PatientHome />} />
+                    <Route path="chat" element={<GeneralChatbot userType="patient" />} />
+                    <Route path="health" element={<HealthSummary />} />
                     <Route path="profile" element={<PatientHome />} />
                     <Route path="settings" element={<PatientHome />} />
                 </Route>

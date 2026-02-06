@@ -384,9 +384,9 @@ def get_doctor_appointments(doctor_id: str, date_filter: Optional[str] = None) -
     print(f"Fetching appointments for doctor: {doctor_id}, date: {date_filter}")
     
     try:
-        # Query appointments with patient details via FK join
+        # Query appointments without FK join (patient_id is email, not UUID)
         query = supabase.table("appointments")\
-            .select("*, patients(email, name, phone)")\
+            .select("*")\
             .eq("doctor_id", doctor_id)
         
         response = query.execute()
@@ -395,8 +395,23 @@ def get_doctor_appointments(doctor_id: str, date_filter: Optional[str] = None) -
         
         appointments = []
         for apt in response.data or []:
-            patient_info = apt.get("patients", {}) or {}
+            patient_id = apt.get("patient_id", "")
             timings = apt.get("timings", {})
+            
+            # Fetch patient info by email (patient_id is email)
+            patient_name = "Patient"
+            patient_email = patient_id
+            patient_phone = ""
+            
+            try:
+                patient_resp = supabase.table("patients").select("name, email, phone").eq("email", patient_id).execute()
+                if patient_resp.data and len(patient_resp.data) > 0:
+                    patient_info = patient_resp.data[0]
+                    patient_name = patient_info.get("name", "Patient")
+                    patient_email = patient_info.get("email", patient_id)
+                    patient_phone = patient_info.get("phone", "")
+            except Exception as pe:
+                print(f"Could not fetch patient info: {pe}")
             
             # Handle timings as JSONB object
             date_part = ""
@@ -417,10 +432,10 @@ def get_doctor_appointments(doctor_id: str, date_filter: Optional[str] = None) -
             
             appointments.append({
                 "id": apt.get("id"),
-                "patient_id": apt.get("patient_id"),
-                "patient_name": patient_info.get("name", "Patient"),
-                "patient_email": patient_info.get("email", ""),
-                "patient_phone": patient_info.get("phone", ""),
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "patient_email": patient_email,
+                "patient_phone": patient_phone,
                 "specialty": apt.get("specialty", "General Medicine"),
                 "date": date_part,
                 "time": time_part,

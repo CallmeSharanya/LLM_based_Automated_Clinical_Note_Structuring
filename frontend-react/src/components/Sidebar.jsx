@@ -27,7 +27,7 @@ const patientNavigation = [
     { name: 'Book Appointment', href: '/patient/intake', icon: CalendarDaysIcon },
     { name: 'My Records', href: '/patient/records', icon: DocumentTextIcon },
     { name: 'Upload Documents', href: '/patient/upload', icon: CloudArrowUpIcon },
-    { name: 'Chat with Doctor', href: '/patient/chat', icon: ChatBubbleLeftRightIcon },
+    { name: 'Health Assistant', href: '/patient/chat', icon: ChatBubbleLeftRightIcon },
     { name: 'Health Summary', href: '/patient/health', icon: HeartIcon },
 ];
 

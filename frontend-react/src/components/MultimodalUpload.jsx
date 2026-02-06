@@ -12,6 +12,7 @@ import {
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { multimodalAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const ACCEPTED_TYPES = {
     'image/jpeg': 'Image (JPEG)',
@@ -26,6 +27,7 @@ export default function MultimodalUpload({
     userType = 'patient',
     showSOAPPreview = true
 }) {
+    const { user } = useAuth();  // Get logged-in user
     const [files, setFiles] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processedResults, setProcessedResults] = useState(null);
@@ -106,6 +108,11 @@ export default function MultimodalUpload({
             files.forEach(({ file }) => {
                 formData.append('files', file);
             });
+
+            // Add patient_id if user is logged in (for linking to doctor review)
+            if (user?.id) {
+                formData.append('patient_id', user.id);
+            }
 
             // Call the multimodal processing API
             const result = await multimodalAPI.processMultimodal(formData);

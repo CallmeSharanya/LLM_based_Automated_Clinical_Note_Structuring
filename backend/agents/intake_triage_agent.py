@@ -112,10 +112,10 @@ class IntakeTriageAgent:
         """Get initial greeting message"""
         return """👋 Hello! I'm your virtual health assistant. I'm here to help understand your symptoms and connect you with the right doctor.
 
-**Important:** This is not an emergency service. If you're experiencing a life-threatening emergency, please call emergency services (108/112) immediately.
+⚠️ Important: This is not an emergency service. If you're experiencing a life-threatening emergency, please call emergency services (108/112) immediately.
 
 To get started, could you please tell me:
-**What brings you in today? What's your main concern or symptom?**"""
+What brings you in today? What's your main concern or symptom?"""
     
     def process_message(self, session_id: str, user_message: str) -> Dict[str, Any]:
         """
@@ -325,21 +325,21 @@ Return JSON:
         priority_emoji = {"red": "🔴", "orange": "🟠", "yellow": "🟡", "green": "🟢"}
         p = triage_result["priority"]
         
-        response = f"""✅ **Thank you for completing the intake!**
+        response = f"""✅ Thank you for completing the intake!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 **Summary:**
-• **Main concern:** {chief}
-• **Duration:** {duration}
-• **Severity:** {severity}
+📋 Summary:
+• Main concern: {chief}
+• Duration: {duration}
+• Severity: {severity}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{priority_emoji[p]} **Triage:** {p.title()}
-🏥 **Specialty:** {session.suggested_specialties[0] if session.suggested_specialties else 'General Medicine'}
+{priority_emoji[p]} Triage: {p.title()}
+🏥 Specialty: {session.suggested_specialties[0] if session.suggested_specialties else 'General Medicine'}
 
-Type **"Yes"** to find available doctors."""
+Type "Yes" to find available doctors."""
 
         return {
             "response": response,
@@ -354,16 +354,16 @@ Type **"Yes"** to find available doctors."""
     
     def _handle_emergency(self, session: IntakeSession, user_message: str) -> Dict[str, Any]:
         """Handle emergency/red flag situations"""
-        response = """⚠️ **URGENT ALERT**
+        response = """⚠️ URGENT ALERT
 
 Based on what you've described, this could be a medical emergency.
 
-**Please take these steps immediately:**
-1. 🚨 Call emergency services: **108** or **112**
+Please take these steps immediately:
+1. 🚨 Call emergency services: 108 or 112
 2. Do not drive yourself - wait for emergency medical services
 3. If someone is with you, let them know about your symptoms
 
-I've flagged your case as **HIGH PRIORITY**. If you still want to continue with the intake, a doctor will be notified immediately.
+I've flagged your case as HIGH PRIORITY. If you still want to continue with the intake, a doctor will be notified immediately.
 
 Would you like me to:
 1. Connect you with emergency services information
@@ -436,20 +436,20 @@ Return ONLY valid JSON."""
                     "Could you tell me more about that? Where exactly do you feel the discomfort?")
             else:
                 session.current_stage = "chief_complaint"
-                response = f"""Thank you for sharing that. I understand you're experiencing: **{', '.join(session.symptoms)}**
+                response = f"""Thank you for sharing that. I understand you're experiencing: {', '.join(session.symptoms)}
 
 Now, let me ask a few more questions to better understand your symptoms.
 
-📍 **Where exactly is the problem?** (e.g., left side of chest, lower back, behind eyes)
-And **can you describe what it feels like?** (e.g., sharp, dull, throbbing, burning)"""
+📍 Where exactly is the problem? (e.g., left side of chest, lower back, behind eyes)
+And can you describe what it feels like? (e.g., sharp, dull, throbbing, burning)"""
         
         except:
             session.symptoms = [user_message]
             session.current_stage = "chief_complaint"
             response = f"""I see. Let me understand this better.
 
-📍 **Where exactly do you feel this?**
-And **how would you describe the sensation?** (e.g., sharp pain, dull ache, pressure)"""
+📍 Where exactly do you feel this?
+And how would you describe the sensation? (e.g., sharp pain, dull ache, pressure)"""
         
         return {
             "response": response,
@@ -465,11 +465,11 @@ And **how would you describe the sensation?** (e.g., sharp pain, dull ache, pres
         
         response = """Got it, thank you for that detail.
 
-⏱️ **How long have you been experiencing this?**
+⏱️ How long have you been experiencing this?
 - When did it start? (e.g., 2 days ago, this morning, for the past week)
 - Is it constant or does it come and go?
 
-📊 **On a scale of 1-10, how severe is it?**
+📊 On a scale of 1-10, how severe is it?
 (1 = barely noticeable, 10 = worst imaginable)"""
         
         return {
@@ -501,7 +501,7 @@ Return ONLY valid JSON. If severity not mentioned, estimate based on language us
         
         response = """Thank you. Now let's check for any related symptoms.
 
-🔍 **Are you experiencing any of these along with your main symptom?**
+🔍 Are you experiencing any of these along with your main symptom?
 - Fever or chills
 - Nausea or vomiting
 - Fatigue or weakness
@@ -538,7 +538,7 @@ Return ONLY valid JSON."""
         
         response = """Noted. Now, a few questions about your medical background.
 
-📋 **Medical History:**
+📋 Medical History:
 1. Do you have any ongoing medical conditions? (e.g., diabetes, hypertension, asthma, heart disease)
 2. Have you had any surgeries in the past?
 3. Is there any relevant family history of medical conditions?
@@ -571,7 +571,7 @@ Return ONLY valid JSON."""
         
         response = """Thank you for sharing that.
 
-💊 **Medications & Allergies:**
+💊 Medications & Allergies:
 1. Are you currently taking any medications? (prescription or over-the-counter)
 2. Do you have any known allergies? (medications, food, or environmental)
 
@@ -604,7 +604,7 @@ Return ONLY valid JSON."""
         
         response = """Almost done! Just one more thing.
 
-🌡️ **Current Vitals (if you have them):**
+🌡️ Current Vitals (if you have them):
 If you have access to any of these measurements, please share:
 - Temperature
 - Blood pressure
@@ -672,27 +672,27 @@ Return ONLY valid JSON. Use null for missing values."""
         
         p = triage_result["priority"]
         
-        response = f"""✅ **Thank you for completing the intake assessment!**
+        response = f"""✅ Thank you for completing the intake assessment!
 
 ---
-📋 **Summary of Your Symptoms:**
+📋 Summary of Your Symptoms:
 • Main concern: {', '.join(session.symptoms)}
 • Duration: {session.symptom_details.get('duration', 'Not specified')}
 • Severity: {session.symptom_details.get('severity', 'Not specified')}/10
 
 ---
-{priority_emoji[p]} **Triage Assessment:** {priority_text[p]}
+{priority_emoji[p]} Triage Assessment: {priority_text[p]}
 
-🏥 **Recommended Specialty:** {session.suggested_specialties[0] if session.suggested_specialties else 'General Medicine'}
+🏥 Recommended Specialty: {session.suggested_specialties[0] if session.suggested_specialties else 'General Medicine'}
 
 ---
-**What happens next:**
+What happens next:
 1. We'll match you with the most suitable doctor
 2. You'll receive appointment options based on availability
 3. The doctor will review your preliminary assessment before your visit
 
 Would you like me to proceed with finding an available doctor?
-Type **"Yes"** to continue or **"No"** if you have more symptoms to add."""
+Type "Yes" to continue or "No" if you have more symptoms to add."""
 
         return {
             "response": response,

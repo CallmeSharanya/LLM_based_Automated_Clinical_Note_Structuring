@@ -55,11 +55,8 @@ export default function DoctorDashboardNew() {
         }
 
         try {
-            // Get today's date in YYYY-MM-DD format
-            const today = new Date().toISOString().split('T')[0];
-
-            // Fetch real appointments from Supabase for this doctor
-            const response = await appointmentAPI.getDoctorAppointments(user.id, today);
+            // Fetch all appointments from Supabase for this doctor (no date filter)
+            const response = await appointmentAPI.getDoctorAppointments(user.id);
 
             if (response.success && response.appointments) {
                 const formattedAppointments = response.appointments.map(apt => ({

@@ -1,0 +1,78 @@
+================================================================================
+                    EMERGENCY DEPARTMENT CLINICAL NOTES
+================================================================================
+
+PATIENT INFORMATION:
+--------------------
+Name: Rajesh Kumar
+Age: 34 years
+Gender: Male
+MRN: ED-2024-78432
+Date: 03-Feb-2024
+Time of Arrival: 14:32 hrs
+
+CHIEF COMPLAINT:
+----------------
+Severe pain in right thigh following road traffic accident (RTA)
+
+HISTORY OF PRESENT ILLNESS:
+---------------------------
+Patient was riding a two-wheeler when he was hit by a truck approximately 
+2 hours ago. He was thrown off the bike and landed on his right side. 
+Patient complains of severe pain in the right thigh, inability to move 
+the right leg, and visible deformity. No loss of consciousness reported.
+
+VITAL SIGNS:
+------------
+Blood Pressure: 130/85 mmHg
+Pulse Rate: 102 bpm (tachycardia, likely due to pain)
+Respiratory Rate: 20/min
+Temperature: 98.4°F (36.9°C)
+SpO2: 98% on room air
+Pain Score: 9/10
+
+PHYSICAL EXAMINATION:
+---------------------
+General: Patient is alert, oriented, in acute distress due to pain
+Right Lower Extremity:
+  - Obvious deformity of right thigh
+  - Shortening and external rotation of right leg
+  - Swelling and tenderness over mid-thigh
+  - Limited range of motion due to pain
+  - Distal pulses: Dorsalis pedis and posterior tibial pulses palpable
+  - Sensation intact in all dermatomes
+  - Capillary refill < 2 seconds
+  
+No other obvious injuries. Pelvis stable on compression.
+
+IMAGING ORDERED:
+----------------
+X-ray Right Femur AP and Lateral - COMPLETED
+(Findings: Comminuted fracture of right femur shaft with multiple 
+fragments and significant displacement)
+
+ASSESSMENT:
+-----------
+1. Comminuted fracture of right femur - likely Grade IIIa open fracture
+2. Road traffic accident with no other apparent injuries
+3. Neurovascular status intact distally
+
+PLAN:
+-----
+1. IV access established, Ringer Lactate infusion started
+2. Pain management: Inj. Tramadol 100mg IV stat
+3. Tetanus toxoid given
+4. NPO for possible surgery
+5. Orthopedic consultation for surgical fixation
+6. Pre-operative workup: CBC, RFT, LFT, Coagulation profile, Blood grouping
+7. Admit under Orthopedics for Intramedullary nailing
+
+DISPOSITION:
+------------
+Admit to Orthopedic Ward for surgical management
+
+================================================================================
+Attending Physician: Dr. Arun Sharma, MBBS, MS (Ortho)
+Signature: [Signed Electronically]
+Time: 15:45 hrs
+================================================================================
