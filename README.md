@@ -1,4 +1,4 @@
-# NLP_EHR: Intelligent Clinical Documentation System
+#  Intelligent Clinical Documentation System
 
 <div align="center">
 
