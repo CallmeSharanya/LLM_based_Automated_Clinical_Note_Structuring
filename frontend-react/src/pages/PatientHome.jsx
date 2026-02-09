@@ -99,6 +99,23 @@ export default function PatientHome() {
             onClick: handleEmergency,
         },
     ];
+    const calculateAge = (dobString) => {
+        if (!dobString) return null;
+
+        const today = new Date();
+        const birthDate = new Date(dobString);
+
+        // Calculate raw year difference
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+
+        // Adjust if birthday hasn't happened yet this year
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+
+        return age;
+    };
 
     return (
         <div className="space-y-8">
@@ -164,7 +181,7 @@ export default function PatientHome() {
                             </div>
                             <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/20 transition-colors">
                                 <p className="text-sm text-white/70 mb-1">Age</p>
-                                <p className="text-3xl font-bold">{user?.age || 35} <span className="text-lg font-normal">years</span></p>
+                                <p className="text-3xl font-bold">{calculateAge(user?.date_of_birth) || 35} <span className="text-lg font-normal">years</span></p>
                             </div>
                             <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/20 transition-colors">
                                 <p className="text-sm text-white/70 mb-1">Upcoming Appointments</p>
