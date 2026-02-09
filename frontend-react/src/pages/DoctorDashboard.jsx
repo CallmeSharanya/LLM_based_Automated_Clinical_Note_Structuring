@@ -87,10 +87,17 @@ export default function DoctorDashboard() {
 
         setIsLoading(true);
         try {
+            const soapForValidation =
+            {
+                Subjective: editedSoap.Subjective || editedSoap.subjective || '',
+                Objective: editedSoap.Objective || editedSoap.objective || '',
+                Assessment: editedSoap.Assessment || editedSoap.assessment || '',
+                Plan: editedSoap.Plan || editedSoap.plan || ''
+            };
+
             const result = await soapAPI.validateSoap(
-                editedSoap,
-                selectedSession?.symptoms,
-                null
+                soapForValidation,
+                selectedSession?.symptoms || [],
             );
             setValidation(result);
 
@@ -101,7 +108,9 @@ export default function DoctorDashboard() {
             }
         } catch (error) {
             toast.error('Validation failed');
-            console.error(error);
+            console.log(error);
+            console.log(error.response);
+            console.log(error.message);
         } finally {
             setIsLoading(false);
         }
@@ -119,8 +128,13 @@ export default function DoctorDashboard() {
             toast.success('SOAP note saved');
             await validateSoap();
         } catch (error) {
-            toast.error('Failed to save SOAP');
-            console.error(error);
+            const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+            toast.error(`Failed to save SOAP: ${errorMsg}`);
+            console.error('Save SOAP Error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
         } finally {
             setIsLoading(false);
         }
@@ -142,8 +156,13 @@ export default function DoctorDashboard() {
             setActiveTab('summary');
             toast.success('Patient summary generated!');
         } catch (error) {
-            toast.error('Failed to generate summary');
-            console.error(error);
+            const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+            toast.error(`Failed to generate summary: ${errorMsg}`);
+            console.error('Generate Summary Error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
         } finally {
             setIsLoading(false);
         }

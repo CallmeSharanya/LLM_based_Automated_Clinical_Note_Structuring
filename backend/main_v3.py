@@ -111,7 +111,7 @@ class EncounterUpdate(BaseModel):
     diagnoses: Optional[List[str]] = None
 
 class ValidateSOAPRequest(BaseModel):
-    soap_note: Dict[str, str]
+    soap_note: Dict[str, Any]
     source_conversation: Optional[List[Dict]] = None
     extracted_symptoms: Optional[List[str]] = None
     specialty: Optional[str] = None
@@ -1459,35 +1459,6 @@ async def get_activity_feed():
 # ============================================================================
 # ENCOUNTER MANAGEMENT
 # ============================================================================
-
-class SoapValidationRequest(BaseModel):
-    soap_note: Dict
-    extracted_symptoms: Optional[List] = None
-    specialty: Optional[str] = None
-
-@app.post("/validate/soap")
-async def validate_soap_endpoint(request: SoapValidationRequest):
-    """Validate a SOAP note using the Dual Validator Agent"""
-    print("running validation...")
-    try:
-        validation = dual_validator.validate_soap(request.soap_note)
-        
-        # Format response
-        return {
-            "status": "VALID" if validation.is_valid else "NEEDS_REVIEW",
-            "is_valid": validation.is_valid,
-            "issues": [
-                {"section": i.section, "message": i.message, "level": "error" if i.is_blocking else "warning"} 
-                for i in validation.issues
-            ],
-            "scores": validation.scores,
-            "auto_corrections": {}, # validation.auto_corrections if available
-            "status_emoji": "✅" if validation.is_valid else "⚠️" 
-        }
-    except Exception as e:
-        print(f"❌ Validation error: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 class EncounterRequest(BaseModel):
     encounter_id: str
