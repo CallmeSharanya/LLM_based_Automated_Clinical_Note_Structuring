@@ -195,13 +195,35 @@ CREATE TABLE IF NOT EXISTS soap_edit_logs (
 );
 
 -- =============================================================================
--- CLINICAL NOTES TABLE (Extended from existing)
+-- CLINICAL NOTES TABLE
 -- =============================================================================
--- Note: Assuming this table already exists, adding any missing columns
-ALTER TABLE clinical_notes 
-ADD COLUMN IF NOT EXISTS encounter_id UUID REFERENCES encounters(id),
-ADD COLUMN IF NOT EXISTS validation_score FLOAT,
-ADD COLUMN IF NOT EXISTS specialty TEXT;
+CREATE TABLE IF NOT EXISTS clinical_notes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id TEXT,
+    encounter_id UUID REFERENCES encounters(id),
+    original_note TEXT,
+    processed_soap JSONB,
+    validation_score FLOAT,
+    specialty TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =============================================================================
+-- APPOINTMENTS TABLE (Required for booking)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS appointments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doctor_id UUID REFERENCES doctors(id),
+    patient_id TEXT NOT NULL,  -- Patient's email
+    timings JSONB NOT NULL,    -- {"date": "2026-02-02", "time": "14:00"}
+    specialty TEXT,
+    appointment_type TEXT DEFAULT 'Consultation',
+    status TEXT DEFAULT 'confirmed',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- =============================================================================
 -- SPECIALTY TEMPLATES TABLE

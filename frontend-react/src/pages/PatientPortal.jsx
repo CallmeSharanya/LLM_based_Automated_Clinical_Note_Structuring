@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PaperAirplaneIcon,
@@ -13,6 +14,7 @@ import toast from 'react-hot-toast';
 import { intakeAPI, doctorAPI } from '../services/api';
 
 export default function PatientPortal() {
+    const navigate = useNavigate();
     const [sessionId, setSessionId] = useState(null);
     const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState('');
@@ -499,10 +501,16 @@ export default function PatientPortal() {
 
             <div className="space-y-3">
                 <button
-                    onClick={() => window.location.reload()}
+                    onClick={() => navigate('/patient/home', { state: { refreshAppointments: true } })}
                     className="btn-primary px-8"
                 >
-                    Start New Assessment
+                    View My Appointments
+                </button>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="btn-secondary px-8 block mt-3"
+                >
+                    Book Another Appointment
                 </button>
             </div>
         </motion.div>

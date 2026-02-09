@@ -44,15 +44,14 @@ export default function DoctorDashboard() {
         if (!user?.id) return;
 
         try {
-            // Get today's date in YYYY-MM-DD format
-            const today = new Date().toISOString().split('T')[0];
-            const response = await appointmentAPI.getDoctorAppointments(user.id, today);
+            // Load all upcoming appointments (no date filter)
+            const response = await appointmentAPI.getDoctorAppointments(user.id);
 
             if (response.success) {
                 setTodaySchedule(response.appointments || []);
             }
         } catch (error) {
-            console.error('Failed to load today\'s schedule:', error);
+            console.error('Failed to load schedule:', error);
         }
     };
 
@@ -88,10 +87,17 @@ export default function DoctorDashboard() {
 
         setIsLoading(true);
         try {
+            const soapForValidation =
+            {
+                Subjective: editedSoap.Subjective || editedSoap.subjective || '',
+                Objective: editedSoap.Objective || editedSoap.objective || '',
+                Assessment: editedSoap.Assessment || editedSoap.assessment || '',
+                Plan: editedSoap.Plan || editedSoap.plan || ''
+            };
+
             const result = await soapAPI.validateSoap(
-                editedSoap,
-                selectedSession?.symptoms,
-                null
+                soapForValidation,
+                selectedSession?.symptoms || [],
             );
             setValidation(result);
 
@@ -102,7 +108,9 @@ export default function DoctorDashboard() {
             }
         } catch (error) {
             toast.error('Validation failed');
-            console.error(error);
+            console.log(error);
+            console.log(error.response);
+            console.log(error.message);
         } finally {
             setIsLoading(false);
         }
@@ -113,15 +121,20 @@ export default function DoctorDashboard() {
 
         setIsLoading(true);
         try {
-            await encounterAPI.update(
-                selectedSession.session_id,
-                editedSoap
-            );
+            await intakeAPI.updateSession(selectedSession.session_id, {
+                preliminary_soap: editedSoap,
+                final_soap: editedSoap
+            });
             toast.success('SOAP note saved');
             await validateSoap();
         } catch (error) {
-            toast.error('Failed to save SOAP');
-            console.error(error);
+            const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+            toast.error(`Failed to save SOAP: ${errorMsg}`);
+            console.error('Save SOAP Error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
         } finally {
             setIsLoading(false);
         }
@@ -143,8 +156,13 @@ export default function DoctorDashboard() {
             setActiveTab('summary');
             toast.success('Patient summary generated!');
         } catch (error) {
-            toast.error('Failed to generate summary');
-            console.error(error);
+            const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+            toast.error(`Failed to generate summary: ${errorMsg}`);
+            console.error('Generate Summary Error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
         } finally {
             setIsLoading(false);
         }
@@ -166,8 +184,8 @@ export default function DoctorDashboard() {
             <section className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Today's Schedule</h2>
-                        <p className="text-gray-600">Your appointments for today</p>
+                        <h2 className="text-2xl font-bold text-gray-900">Upcoming Appointments</h2>
+                        <p className="text-gray-600">Your scheduled appointments</p>
                     </div>
                     <button onClick={loadTodaySchedule} className="btn-secondary text-sm">
                         Refresh

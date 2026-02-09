@@ -9,8 +9,10 @@ Thumbs.db
 env/
 
 # Python
-__pycache__/
+backend/__pycache__/
 *.py[cod]
 *node_modules*
+**/__pycache__
 
 *.log
+

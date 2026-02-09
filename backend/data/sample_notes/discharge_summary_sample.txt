@@ -1,0 +1,69 @@
+DISCHARGE SUMMARY
+=================
+
+PATIENT INFORMATION
+-------------------
+Name: Jane Doe
+DOB: 05/15/1990
+MRN: 12345678
+Admission Date: 01/20/2026
+Discharge Date: 01/23/2026
+Length of Stay: 3 days
+Attending Physician: Dr. Sanjay Mehta, Cardiology
+
+PRIMARY DIAGNOSIS:
+Acute viral gastroenteritis with dehydration
+
+SECONDARY DIAGNOSES:
+1. Hypokalemia (resolved)
+2. Mild anemia
+3. Essential hypertension (pre-existing)
+
+CHIEF COMPLAINT AT ADMISSION:
+3-day history of nausea, vomiting, and diarrhea with inability to tolerate oral intake
+
+HISTORY OF PRESENT ILLNESS:
+42-year-old female presented to the emergency department with complaints of 
+persistent nausea, vomiting (8-10 episodes/day), and watery diarrhea for 3 days.
+Associated with cramping abdominal pain, weakness, and decreased urine output.
+No blood in stool or vomit. Recent contact with sick family member.
+
+HOSPITAL COURSE:
+Patient was admitted for IV fluid resuscitation and electrolyte replacement.
+- Day 1: IV NS at 150 ml/hr, potassium replacement, NPO
+- Day 2: Symptoms improving, started clear liquid diet, K+ normalized
+- Day 3: Tolerating regular diet, symptoms resolved, ready for discharge
+
+PERTINENT FINDINGS:
+- Admission labs: K+ 3.1 (low), Hgb 11.2, BUN 28, Cr 1.1
+- Discharge labs: K+ 4.0, BUN 15, Cr 0.9
+- Stool culture: Pending at discharge (results to be followed up)
+
+PROCEDURES PERFORMED:
+None
+
+MEDICATIONS AT DISCHARGE:
+1. Ondansetron 4mg PO PRN for nausea (Qty 10)
+2. Potassium chloride 20 mEq PO daily x 5 days
+3. Amlodipine 5mg PO daily (continue home medication)
+4. Probiotic capsule once daily x 2 weeks
+
+DIETARY INSTRUCTIONS:
+- BRAT diet (bananas, rice, applesauce, toast) for next 2 days
+- Advance to regular diet as tolerated
+- Avoid dairy products for 1 week
+- Increase oral fluid intake to 8-10 glasses per day
+
+ACTIVITY:
+- Rest for 2 days, then resume normal activities
+- Avoid strenuous exercise for 1 week
+
+FOLLOW-UP:
+- Primary care in 1 week
+- Return to ED if: persistent vomiting, bloody stool, high fever, severe abdominal pain
+
+CONDITION AT DISCHARGE: Stable, improved
+
+Dictated by: Dr. Sanjay Mehta, MD
+Verified by: Nursing Staff
+Discharge Coordinator: Sally Johnson, RN

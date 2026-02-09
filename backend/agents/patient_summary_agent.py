@@ -2,17 +2,32 @@
 Patient Summary Agent
 Generates patient-friendly summaries of clinical encounters.
 Converts medical terminology to plain language.
+Uses Groq as primary LLM to avoid Gemini quota issues.
 """
 
 import json
 from typing import Dict, Any, List
 from datetime import datetime
-
-import google.generativeai as genai
 import os
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Try to import Groq (primary LLM)
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("⚠️ Groq not installed for patient summary agent.")
+
+# Try to import Gemini (fallback)
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️ Gemini not installed for patient summary agent.")
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 class PatientSummaryAgent:
@@ -25,19 +40,52 @@ class PatientSummaryAgent:
     - Warning signs explanation
     - Medication instructions
     - Follow-up reminders
+    
+    Uses Groq as primary LLM for reliability.
     """
     
-    def __init__(self, model: str = "gemini-2.0-flash"):
-        self.model = genai.GenerativeModel(model)
+    def __init__(self, model: str = "llama-3.3-70b-versatile"):
+        self.groq_model = model
+        self.use_groq = GROQ_AVAILABLE and GROQ_API_KEY
+        
+        if self.use_groq:
+            self.groq_client = Groq(api_key=GROQ_API_KEY)
+        
+        # Gemini as fallback
+        self.gemini_model = None
+        if GEMINI_AVAILABLE:
+            try:
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+            except:
+                print("⚠️ Could not initialize Gemini for patient summary")
     
     def _generate_response(self, prompt: str) -> str:
-        """Generate response using Gemini"""
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            print(f"Error generating response: {e}")
-            return ""
+        """Generate response using Groq (primary) or Gemini (fallback)"""
+        # Try Groq first
+        if self.use_groq:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[
+                        {"role": "system", "content": "You are a healthcare communication specialist who converts medical information to patient-friendly language."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2048
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                print(f"Groq error in patient summary: {e}")
+        
+        # Fallback to Gemini
+        if self.gemini_model:
+            try:
+                response = self.gemini_model.generate_content(prompt)
+                return response.text.strip()
+            except Exception as e:
+                print(f"Gemini error in patient summary: {e}")
+        
+        return ""
     
     def generate_patient_summary(
         self,

@@ -3,6 +3,8 @@ Dual Validator Agent
 Implements comprehensive validation of SOAP notes:
 1. Structural Validation - Schema compliance, section integrity
 2. Clinical Consistency Validation - Concept coverage, contradiction detection
+
+Uses Groq as primary LLM to avoid Gemini quota issues.
 """
 
 import json
@@ -10,12 +12,26 @@ import re
 from typing import Dict, Any, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
-
-import google.generativeai as genai
 import os
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Try to import Groq (primary LLM)
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("⚠️ Groq not installed for dual validator agent.")
+
+# Try to import Gemini (fallback)
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️ Gemini not installed for dual validator agent.")
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 class ValidationLevel(Enum):
@@ -62,6 +78,8 @@ class DualValidatorAgent:
        - Concept coverage (symptoms from conversation → in SOAP)
        - Medication-diagnosis alignment
        - Red flag verification
+       
+    Uses Groq as primary LLM for reliability.
     """
     
     # Minimum expected content lengths
@@ -80,17 +98,48 @@ class DualValidatorAgent:
         "Plan": ["treatment", "follow-up"]
     }
     
-    def __init__(self, model: str = "gemini-2.0-flash"):
-        self.model = genai.GenerativeModel(model)
+    def __init__(self, model: str = "llama-3.3-70b-versatile"):
+        self.groq_model = model
+        self.use_groq = GROQ_AVAILABLE and GROQ_API_KEY
+        
+        if self.use_groq:
+            self.groq_client = Groq(api_key=GROQ_API_KEY)
+        
+        # Gemini as fallback
+        self.gemini_model = None
+        if GEMINI_AVAILABLE:
+            try:
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+            except:
+                print("⚠️ Could not initialize Gemini for validator")
     
     def _generate_response(self, prompt: str) -> str:
-        """Generate response using Gemini"""
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            print(f"Error generating response: {e}")
-            return "{}"
+        """Generate response using Groq (primary) or Gemini (fallback)"""
+        # Try Groq first
+        if self.use_groq:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[
+                        {"role": "system", "content": "You are a clinical documentation validator. Always respond with valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1024
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                print(f"Groq error in validator: {e}")
+        
+        # Fallback to Gemini
+        if self.gemini_model:
+            try:
+                response = self.gemini_model.generate_content(prompt)
+                return response.text.strip()
+            except Exception as e:
+                print(f"Gemini error in validator: {e}")
+        
+        return "{}"
     
     def validate_soap(
         self, 

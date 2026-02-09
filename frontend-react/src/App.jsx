@@ -2,7 +2,14 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ROLES } from './context/AuthContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 
-// Auth Pages
+// Layouts
+import PatientLayout from './components/PatientLayout';
+import DoctorLayout from './components/DoctorLayout';
+import HospitalLayout from './components/HospitalLayout';
+import Layout from './components/Layout';
+
+// Public Pages
+import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import PatientSignup from './pages/PatientSignup';
 
@@ -10,16 +17,20 @@ import PatientSignup from './pages/PatientSignup';
 import PatientHome from './pages/PatientHome';
 import PatientIntake from './pages/PatientIntake';
 import PatientPortal from './pages/PatientPortal';
+import PatientRecords from './pages/PatientRecords';
+import PatientUpload from './pages/PatientUpload';
+import HealthSummary from './pages/HealthSummary';
 
 // Doctor Pages
 import DoctorDashboardNew from './pages/DoctorDashboardNew';
 import DoctorDashboard from './pages/DoctorDashboard';
+import SOAPEditor from './pages/SOAPEditor';
+import GeneralChatbot from './pages/GeneralChatbot';
 
 // Hospital Pages
 import HospitalDashboard from './pages/HospitalDashboard';
 
-// Shared/Admin Pages
-import Layout from './components/Layout';
+// Shared Pages
 import ProcessNotes from './pages/ProcessNotes';
 import Analytics from './pages/Analytics';
 import ClinicalChat from './pages/ClinicalChat';
@@ -30,6 +41,7 @@ function App() {
         <AuthProvider>
             <Routes>
                 {/* Public Routes */}
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={
                     <PublicRoute>
                         <Login />
@@ -41,44 +53,59 @@ function App() {
                     </PublicRoute>
                 } />
 
-                {/* Patient Routes */}
-                <Route path="/patient/home" element={
+                {/* Patient Routes with Sidebar Layout */}
+                <Route path="/patient" element={
                     <ProtectedRoute allowedRoles={[ROLES.PATIENT]}>
-                        <PatientHome />
+                        <PatientLayout />
                     </ProtectedRoute>
-                } />
-                <Route path="/patient/intake" element={
-                    <ProtectedRoute allowedRoles={[ROLES.PATIENT]}>
-                        <PatientIntake />
-                    </ProtectedRoute>
-                } />
-                <Route path="/patient/records" element={
-                    <ProtectedRoute allowedRoles={[ROLES.PATIENT]}>
-                        <PatientPortal />
-                    </ProtectedRoute>
-                } />
+                }>
+                    <Route index element={<Navigate to="/patient/home" replace />} />
+                    <Route path="home" element={<PatientHome />} />
+                    <Route path="intake" element={<PatientIntake />} />
+                    <Route path="records" element={<PatientRecords />} />
+                    <Route path="upload" element={<PatientUpload />} />
+                    <Route path="chat" element={<GeneralChatbot userType="patient" />} />
+                    <Route path="health" element={<HealthSummary />} />
+                    <Route path="profile" element={<PatientHome />} />
+                    <Route path="settings" element={<PatientHome />} />
+                </Route>
 
-                {/* Doctor Routes */}
-                <Route path="/doctor/dashboard" element={
+                {/* Doctor Routes with Sidebar Layout */}
+                <Route path="/doctor" element={
                     <ProtectedRoute allowedRoles={[ROLES.DOCTOR]}>
-                        <DoctorDashboardNew />
+                        <DoctorLayout />
                     </ProtectedRoute>
-                } />
-                <Route path="/doctor/patients" element={
-                    <ProtectedRoute allowedRoles={[ROLES.DOCTOR]}>
-                        <DoctorDashboard />
-                    </ProtectedRoute>
-                } />
+                }>
+                    <Route index element={<Navigate to="/doctor/dashboard" replace />} />
+                    <Route path="dashboard" element={<DoctorDashboardNew />} />
+                    <Route path="patients" element={<DoctorDashboard />} />
+                    <Route path="soap-editor" element={<SOAPEditor />} />
+                    <Route path="upload" element={<SOAPEditor />} />
+                    <Route path="chat" element={<GeneralChatbot userType="doctor" />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="profile" element={<DoctorDashboardNew />} />
+                    <Route path="settings" element={<DoctorDashboardNew />} />
+                </Route>
 
-                {/* Hospital Routes */}
-                <Route path="/hospital/dashboard" element={
+                {/* Hospital Routes with Sidebar Layout */}
+                <Route path="/hospital" element={
                     <ProtectedRoute allowedRoles={[ROLES.HOSPITAL]}>
-                        <HospitalDashboard />
+                        <HospitalLayout />
                     </ProtectedRoute>
-                } />
+                }>
+                    <Route index element={<Navigate to="/hospital/dashboard" replace />} />
+                    <Route path="dashboard" element={<HospitalDashboard />} />
+                    <Route path="appointments" element={<HospitalDashboard />} />
+                    <Route path="doctors" element={<HospitalDashboard />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="disease-stats" element={<HospitalDashboard />} />
+                    <Route path="chat" element={<GeneralChatbot userType="hospital" />} />
+                    <Route path="profile" element={<HospitalDashboard />} />
+                    <Route path="settings" element={<HospitalDashboard />} />
+                </Route>
 
-                {/* Shared Routes (Doctor & Hospital) */}
-                <Route path="/" element={
+                {/* Legacy Shared Routes (Doctor & Hospital) */}
+                <Route path="/shared" element={
                     <ProtectedRoute allowedRoles={[ROLES.DOCTOR, ROLES.HOSPITAL]}>
                         <Layout />
                     </ProtectedRoute>
@@ -93,7 +120,7 @@ function App() {
                 </Route>
 
                 {/* Fallback */}
-                <Route path="*" element={<Navigate to="/login" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </AuthProvider>
     );
