@@ -93,7 +93,7 @@ class ChatMessage(BaseModel):
 
 class DoctorMatchRequest(BaseModel):
     symptoms: List[str]
-    preliminary_soap: Optional[Dict[str, str]] = None
+    preliminary_soap: Optional[Dict[str, Any]] = None
     triage_priority: str = "green"
     preferred_language: Optional[str] = None
 
@@ -107,7 +107,7 @@ class EncounterUpdate(BaseModel):
     doctor_notes: Optional[str] = None
     vitals: Optional[Dict[str, Any]] = None
     examination: Optional[Dict[str, Any]] = None
-    edited_soap: Optional[Dict[str, str]] = None
+    edited_soap: Optional[Dict[str, Any]] = None
     diagnoses: Optional[List[str]] = None
 
 class ValidateSOAPRequest(BaseModel):
@@ -117,7 +117,7 @@ class ValidateSOAPRequest(BaseModel):
     specialty: Optional[str] = None
 
 class PatientSummaryRequest(BaseModel):
-    soap_note: Dict[str, str]
+    soap_note: Dict[str, Any]
     diagnoses: Optional[List[str]] = None
     medications: Optional[List[Dict]] = None
     follow_up_date: Optional[str] = None
@@ -287,19 +287,17 @@ async def list_intake_sessions():
 
 class UpdateSessionRequest(BaseModel):
     session_id: str
-    preliminary_soap: Optional[Dict[str, str]] = None
-    final_soap: Optional[Dict[str, str]] = None
+    preliminary_soap: Optional[Dict[str, Any]] = None
+    final_soap: Optional[Dict[str, Any]] = None
     doctor_notes: Optional[str] = None
 
 @app.post("/intake/update")
 async def update_intake_session(request: UpdateSessionRequest):
     """Update an intake session with edited SOAP notes"""
-    
     if request.session_id not in intake_agent.sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
     session = intake_agent.sessions[request.session_id]
-    
     # Update the session SOAP
     if request.preliminary_soap:
         session.preliminary_soap = request.preliminary_soap
@@ -526,7 +524,7 @@ class SaveDraftSOAPRequest(BaseModel):
     patient_id: str
     session_id: Optional[str] = None
     appointment_id: Optional[str] = None
-    draft_soap: Dict[str, str]
+    draft_soap: Dict[str, Any]
     source: str = "intake"  # "intake", "upload", "conversation"
     symptoms: Optional[List[str]] = None
     triage: Optional[Dict[str, Any]] = None
@@ -648,7 +646,7 @@ class FinalizeSoapRequest(BaseModel):
     draft_id: str
     patient_id: str
     doctor_id: str
-    final_soap: Dict[str, str]
+    final_soap: Dict[str, Any]
     diagnosis_codes: Optional[List[str]] = None
     notes: Optional[str] = None
 
@@ -929,7 +927,7 @@ async def generate_patient_summary(request: PatientSummaryRequest):
 
 @app.post("/summary/sms")
 async def generate_sms_summary(
-    soap_note: Dict[str, str],
+    soap_note: Dict[str, Any],
     patient_name: str = "Patient"
 ):
     """Generate a brief SMS-friendly summary"""
