@@ -372,3 +372,90 @@ INSERT INTO triage_rules (rule_name, priority, symptom_keywords, vital_threshold
  '{}'::jsonb,
  'General Medicine', false, 'Routine appointment scheduling')
 ON CONFLICT DO NOTHING;
+
+-- =============================================================================
+-- RPC FUNCTIONS FOR SIMILARITY SEARCH
+-- =============================================================================
+
+-- Function to search clinical_notes by vector similarity
+CREATE OR REPLACE FUNCTION match_clinical_notes(
+    query_embedding vector(768),
+    match_count int DEFAULT 5
+)
+RETURNS TABLE (
+    id bigint,
+    patient_id text,
+    raw_text text,
+    deidentified_text text,
+    subjective text,
+    objective text,
+    assessment text,
+    plan text,
+    icd_json jsonb,
+    encounter_id uuid,
+    validation_score double precision,
+    speciality text,
+    similarity double precision
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        cn.id,
+        cn.patient_id,
+        cn.raw_text,
+        cn.deidentified_text,
+        cn.subjective,
+        cn.objective,
+        cn.assessment,
+        cn.plan,
+        cn.icd_json,
+        cn.encounter_id,
+        cn.validation_score,
+        cn.speciality,
+        1 - (cn.embedding <=> query_embedding) as similarity
+    FROM clinical_notes cn
+    WHERE cn.embedding IS NOT NULL
+    ORDER BY cn.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
+-- Function to search clinical_notes by text match (fallback when no embedding)
+CREATE OR REPLACE FUNCTION search_clinical_notes_text(
+    search_query text,
+    match_count int DEFAULT 5
+)
+RETURNS TABLE (
+    id bigint,
+    patient_id text,
+    subjective text,
+    objective text,
+    assessment text,
+    plan text,
+    icd_json jsonb,
+    speciality text
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        cn.id,
+        cn.patient_id,
+        cn.subjective,
+        cn.objective,
+        cn.assessment,
+        cn.plan,
+        cn.icd_json,
+        cn.speciality
+    FROM clinical_notes cn
+    WHERE 
+        cn.assessment ILIKE '%' || search_query || '%'
+        OR cn.subjective ILIKE '%' || search_query || '%'
+        OR cn.objective ILIKE '%' || search_query || '%'
+        OR cn.plan ILIKE '%' || search_query || '%'
+    LIMIT match_count;
+END;
+$$;
