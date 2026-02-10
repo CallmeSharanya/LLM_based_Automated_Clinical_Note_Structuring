@@ -11,6 +11,7 @@ import tempfile
 from typing import List, Dict, Any, Optional
 from ocr_utils import extract_text_from_bytes
 from utils import deidentify_text
+import requests
 
 # Try to import Groq (primary LLM)
 try:
@@ -728,6 +729,75 @@ Return ONLY valid JSON."""
                 "message": "I've recorded your input. Please continue with more details.",
                 "draft_soap": None
             }
+
+    def extract_soap_from_tinyllama(self, conversation_text: str) -> Dict[str, Any]:
+        """
+        Extract SOAP note from conversation using external TinyLlama API
+        """
+        SPACE_URL = "https://Shreya5619-soap-tinyllama-api.hf.space/soap"
+        
+        try:
+            print(f"🚀 Calling TinyLlama API at {SPACE_URL}...")
+            resp = requests.post(SPACE_URL, json={"conversation": conversation_text}, timeout=30)
+            
+            if resp.status_code == 200:
+                result = resp.json()
+                soap_note = result.get("soap_note", "")
+                
+                # TinyLlama might return a raw string or a structured object.
+                # Usually these space-based APIs return a string if it's a simple extractor.
+                # If it's a string, we might need to parse it if we want structured JSON.
+                # However, your system expects a Dict with Subjective, Objective, Assessment, Plan.
+                
+                # Let's try to parse it if it looks like JSON, otherwise return as is
+                if isinstance(soap_note, str):
+                    try:
+                        # Try to find JSON in the string
+                        start = soap_note.find('{')
+                        end = soap_note.rfind('}') + 1
+                        if start >= 0 and end > start:
+                            json_str = soap_note[start:end]
+                            return json.loads(json_str)
+                    except:
+                        pass
+                    
+                    # If not JSON, we can try to split by section headers
+                    sections = ["Subjective", "Objective", "Assessment", "Plan"]
+                    structured = {}
+                    current_section = None
+                    lines = soap_note.split("\n")
+                    
+                    for line in lines:
+                        cleaned_line = line.strip().lower()
+                        found = False
+                        for s in sections:
+                            if cleaned_line.startswith(f"{s.lower()}:") or cleaned_line.startswith(f"**{s.lower()}**:") or cleaned_line.startswith(f"{s.lower()} "):
+                                current_section = s
+                                structured[s] = line.split(":", 1)[1].strip() if ":" in line else ""
+                                found = True
+                                break
+                        
+                        if not found and current_section:
+                            structured[current_section] = structured.get(current_section, "") + "\n" + line
+                    
+                    if structured:
+                        return structured
+                    
+                    # If all else fails, return the raw note in Subjective or split it roughly
+                    return {
+                        "Subjective": soap_note,
+                        "Objective": "See Subjective",
+                        "Assessment": "See Subjective",
+                        "Plan": "See Subjective"
+                    }
+                
+                return soap_note
+            else:
+                print(f"❌ TinyLlama API error: {resp.status_code} - {resp.text}")
+                return None
+        except Exception as e:
+            print(f"❌ Error calling TinyLlama API: {e}")
+            return None
 
 
 # Singleton instance

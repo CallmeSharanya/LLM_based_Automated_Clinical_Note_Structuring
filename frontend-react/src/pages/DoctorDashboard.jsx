@@ -7,7 +7,8 @@ import {
     ExclamationTriangleIcon,
     DocumentTextIcon,
     PencilSquareIcon,
-    EyeIcon
+    EyeIcon,
+    SparklesIcon
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -163,6 +164,33 @@ export default function DoctorDashboard() {
                 data: error.response?.data,
                 message: error.message
             });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const extractSoapFromTinyLlama = async () => {
+        if (!selectedSession?.conversation_history) {
+            toast.error('No conversation history available');
+            return;
+        }
+
+        const conversationText = selectedSession.conversation_history
+            .map(m => `${m.role === 'user' ? 'Patient' : 'AI'}: ${m.content}`)
+            .join('\n');
+
+        setIsLoading(true);
+        try {
+            const response = await soapAPI.extractFromInterview(conversationText);
+            if (response.success && response.soap) {
+                setEditedSoap(response.soap);
+                toast.success('SOAP extracted using TinyLlama!');
+            } else {
+                toast.error(response.message || 'Extraction failed');
+            }
+        } catch (error) {
+            toast.error('Failed to call TinyLlama API');
+            console.error(error);
         } finally {
             setIsLoading(false);
         }
@@ -412,6 +440,13 @@ export default function DoctorDashboard() {
                             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                                 <DocumentTextIcon className="w-5 h-5" />
                                 SOAP Note
+                                <button
+                                    onClick={extractSoapFromTinyLlama}
+                                    title="Extract SOAP from Interview using TinyLlama"
+                                    className="ml-2 p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                </button>
                             </h3>
                             <span className="text-sm text-gray-500">
                                 {editedSoap?.is_preliminary && (

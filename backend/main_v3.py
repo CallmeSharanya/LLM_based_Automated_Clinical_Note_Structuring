@@ -1122,6 +1122,32 @@ class ConversationRequest(BaseModel):
 class GenerateSOAPRequest(BaseModel):
     messages: List[Dict[str, Any]]
 
+class InterviewSOAPRequest(BaseModel):
+    conversation: str
+
+@app.post("/soap/extract-from-interview")
+async def extract_soap_from_interview(request: InterviewSOAPRequest):
+    """Extract SOAP from a raw conversation text using external API"""
+    try:
+        soap = multimodal_processor.extract_soap_from_tinyllama(request.conversation)
+        if soap:
+            return {
+                "success": True,
+                "soap": soap
+            }
+        else:
+            # Fallback to standard processor if external API fails
+            messages = [{"role": "user", "content": request.conversation}]
+            result = multimodal_processor.process_conversation_to_soap(messages)
+            return {
+                "success": True,
+                "soap": result.get("draft_soap"),
+                "message": "Used fallback processor as external API was unavailable."
+            }
+    except Exception as e:
+        print(f"❌ Interview extraction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/multimodal/process")
 async def process_multimodal(
     files: List[UploadFile] = File(...),

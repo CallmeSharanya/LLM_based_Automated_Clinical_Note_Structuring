@@ -14,6 +14,7 @@ export default function DoctorDashboardNew() {
     const [saving, setSaving] = useState(false);
     const [consultationSession, setConsultationSession] = useState(null);
     const [fetchingSession, setFetchingSession] = useState(false);
+    const [isTinyLlamaLoading, setIsTinyLlamaLoading] = useState(false);
 
     // Chat state
     const [chatQuery, setChatQuery] = useState('');
@@ -160,6 +161,36 @@ export default function DoctorDashboardNew() {
             assessment: soap.draft_soap?.assessment || soap.draft_soap?.Assessment || '',
             plan: soap.draft_soap?.plan || soap.draft_soap?.Plan || ''
         });
+    };
+
+    const extractSoapFromTinyLlama = async (session) => {
+        if (!session?.conversation_history) {
+            alert('No conversation history available');
+            return;
+        }
+
+        const conversationText = session.conversation_history
+            .map(m => `${m.role === 'user' ? 'Patient' : 'AI'}: ${m.content}`)
+            .join('\n');
+
+        setIsTinyLlamaLoading(true);
+        try {
+            const response = await soapAPI.extractFromInterview(conversationText);
+            if (response.success && response.soap) {
+                setConsultationSession(prev => ({
+                    ...prev,
+                    preliminary_soap: response.soap
+                }));
+                alert('SOAP extracted using TinyLlama!');
+            } else {
+                alert(response.message || 'Extraction failed');
+            }
+        } catch (error) {
+            alert('Failed to call TinyLlama API');
+            console.error(error);
+        } finally {
+            setIsTinyLlamaLoading(false);
+        }
     };
 
     const handleSaveSOAP = async () => {
@@ -766,7 +797,16 @@ export default function DoctorDashboardNew() {
 
                                     {/* SOAP Draft */}
                                     <div className="space-y-4">
-                                        <h4 className="text-xs font-bold text-gray-400 uppercase">AI-Generated SOAP Draft</h4>
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase">AI-Generated SOAP Draft</h4>
+                                            <button
+                                                onClick={() => extractSoapFromTinyLlama(consultationSession)}
+                                                disabled={isTinyLlamaLoading}
+                                                className="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                            >
+                                                {isTinyLlamaLoading ? '⌛ Processing...' : '✨ Use TinyLlama'}
+                                            </button>
+                                        </div>
                                         {consultationSession.preliminary_soap ? (
                                             Object.entries(consultationSession.preliminary_soap).map(([key, value]) => (
                                                 <div key={key} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">

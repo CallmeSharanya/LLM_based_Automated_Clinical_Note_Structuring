@@ -251,6 +251,14 @@ export const soapAPI = {
         return response.data;
     },
 
+    // Extract SOAP from raw interview text using TinyLlama API
+    extractFromInterview: async (conversation) => {
+        const response = await api.post('/soap/extract-from-interview', {
+            conversation
+        });
+        return response.data;
+    },
+
     // Save a draft SOAP note
     saveDraft: async (patientId, draftSoap, source = 'intake', sessionId = null, appointmentId = null, symptoms = null, triage = null) => {
         const response = await api.post('/soap/draft/save', {
