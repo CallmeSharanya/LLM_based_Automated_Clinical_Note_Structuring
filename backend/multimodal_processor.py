@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 from ocr_utils import extract_text_from_bytes
 from utils import deidentify_text
 import requests
+from gradio_client import Client
 
 # Try to import Groq (primary LLM)
 try:
@@ -732,18 +733,21 @@ Return ONLY valid JSON."""
 
     def extract_soap_from_tinyllama(self, conversation_text: str) -> Dict[str, Any]:
         """
-        Extract SOAP note from conversation using external TinyLlama API
+        Extract SOAP note from conversation using external TinyLlama API (via Gradio Client)
         """
-        SPACE_URL = "https://Shreya5619-soap-tinyllama-api.hf.space/soap"
+        SPACE_NAME = "Shreya5619/soap-tinyllama-api"
         
         try:
-            print(f"🚀 Calling TinyLlama API at {SPACE_URL}...")
-            resp = requests.post(SPACE_URL, json={"conversation": conversation_text}, timeout=30)
+            print(f"🚀 Calling TinyLlama HF Space: {SPACE_NAME}...")
+            # Use Gradio Client for more robust interaction with HF Spaces
+            client = Client(SPACE_NAME)
+            result = client.predict(conversation_text)
             
-            if resp.status_code == 200:
-                result = resp.json()
-                soap_note = result.get("soap_note", "")
-                
+            # The result from this specific space is a string containing the SOAP note
+            soap_note = result
+            
+            if soap_note:
+                print(f"✅ Received response from TinyLlama")
                 # TinyLlama might return a raw string or a structured object.
                 # Usually these space-based APIs return a string if it's a simple extractor.
                 # If it's a string, we might need to parse it if we want structured JSON.
@@ -762,7 +766,12 @@ Return ONLY valid JSON."""
                         pass
                     
                     # If not JSON, we can try to split by section headers
-                    sections = ["Subjective", "Objective", "Assessment", "Plan"]
+                    sections = {
+                        "Subjective": ["subjective", "s:"],
+                        "Objective": ["objective", "o:"],
+                        "Assessment": ["assessment", "a:"],
+                        "Plan": ["plan", "p:"]
+                    }
                     structured = {}
                     current_section = None
                     lines = soap_note.split("\n")
@@ -770,12 +779,14 @@ Return ONLY valid JSON."""
                     for line in lines:
                         cleaned_line = line.strip().lower()
                         found = False
-                        for s in sections:
-                            if cleaned_line.startswith(f"{s.lower()}:") or cleaned_line.startswith(f"**{s.lower()}**:") or cleaned_line.startswith(f"{s.lower()} "):
-                                current_section = s
-                                structured[s] = line.split(":", 1)[1].strip() if ":" in line else ""
-                                found = True
-                                break
+                        for s_name, variants in sections.items():
+                            for var in variants:
+                                if cleaned_line.startswith(var) or cleaned_line.startswith(f"**{var}**"):
+                                    current_section = s_name
+                                    structured[s_name] = line.split(":", 1)[1].strip() if ":" in line else ""
+                                    found = True
+                                    break
+                            if found: break
                         
                         if not found and current_section:
                             structured[current_section] = structured.get(current_section, "") + "\n" + line
@@ -793,7 +804,6 @@ Return ONLY valid JSON."""
                 
                 return soap_note
             else:
-                print(f"❌ TinyLlama API error: {resp.status_code} - {resp.text}")
                 return None
         except Exception as e:
             print(f"❌ Error calling TinyLlama API: {e}")
