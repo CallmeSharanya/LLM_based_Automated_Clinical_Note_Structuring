@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     DocumentTextIcon,
@@ -23,6 +23,7 @@ import VoiceInput from '../components/VoiceInput';
 export default function SOAPEditor() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [activeTab, setActiveTab] = useState('conversation'); // conversation, upload, editor
     const [conversationMessages, setConversationMessages] = useState([]);
@@ -42,6 +43,33 @@ export default function SOAPEditor() {
     const [isValidating, setIsValidating] = useState(false);
     const [isFinalizing, setIsFinalizing] = useState(false);
     const [patientInfo, setPatientInfo] = useState(null);
+
+    // Load initial state from navigation context
+    useEffect(() => {
+        if (location.state) {
+            const { conversation, soap, patient } = location.state;
+
+            if (conversation) {
+                setConversationMessages(conversation.map(m => ({
+                    ...m,
+                    timestamp: m.timestamp || new Date()
+                })));
+            }
+
+            if (soap) {
+                setDraftSoap(soap);
+                setEditedSoap(soap);
+                setActiveTab('editor'); // Jump straight to editor if we already have a SOAP draft
+            }
+
+            if (patient) {
+                setPatientInfo(patient);
+            }
+
+            // Clear state from history so it doesn't re-trigger on refresh
+            window.history.replaceState({}, document.title);
+        }
+    }, [location]);
 
     // Handle conversation input
     const handleSendMessage = async () => {

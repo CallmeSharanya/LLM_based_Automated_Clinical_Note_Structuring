@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI, soapAPI, intakeAPI } from '../services/api';
 
 export default function DoctorDashboardNew() {
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('appointments');
     const [appointments, setAppointments] = useState([]);
     const [pendingSOAPs, setPendingSOAPs] = useState([]);
@@ -847,11 +849,21 @@ export default function DoctorDashboardNew() {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        // Store current session in localStorage or state and navigate
-                                        // For now, let's just use the soap editor's native conversation tab?
-                                        // Actually, let's just use the existing finalize logic if needed
-                                        // or navigate to SOAP editor
-                                        alert("Redirecting to SOAP Editor with this context...");
+                                        // Package context to pass to SOAP Editor
+                                        const context = {
+                                            conversation: consultationSession.conversation_history || [],
+                                            soap: consultationSession.preliminary_soap || null,
+                                            patient: {
+                                                id: selectedAppointment?.patient_id || consultationSession?.patient_id,
+                                                name: selectedAppointment?.patient_name,
+                                                age: selectedAppointment?.patient_age,
+                                                gender: selectedAppointment?.patient_gender,
+                                                session_id: consultationSession?.session_id
+                                            }
+                                        };
+
+                                        // Navigate to SOAP Editor with state
+                                        navigate('/doctor/soap-editor', { state: context });
                                         setConsultationSession(null);
                                     }}
                                     className="px-6 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-bold shadow-lg shadow-green-500/20"
