@@ -156,7 +156,8 @@ def book_appointment(
         "patient_id": patient_id,  # Patient's email
         "timings": timings,  # JSONB column
         "specialty": specialty,
-        "appointment_type": appointment_type
+        "appointment_type": appointment_type,
+        "session_id": session_id  # Include session_id
     }
     print("Appointment Data", appointment_data)
     
@@ -342,6 +343,7 @@ def get_patient_appointments(patient_id: str) -> List[Dict[str, Any]]:
             appointments.append({
                 "id": apt.get("id"),
                 "doctor_id": apt.get("doctor_id"),
+                "session_id": apt.get("session_id"),  # Include session_id
                 "doctor_name": doctor_info.get("name", "Doctor"),
                 "specialty": apt.get("specialty") or doctor_info.get("specialty", "General Medicine"),
                 "date": date_part,
@@ -433,6 +435,7 @@ def get_doctor_appointments(doctor_id: str, date_filter: Optional[str] = None) -
             appointments.append({
                 "id": apt.get("id"),
                 "patient_id": patient_id,
+                "session_id": apt.get("session_id"),  # Include session_id
                 "patient_name": patient_name,
                 "patient_email": patient_email,
                 "patient_phone": patient_phone,

@@ -181,7 +181,9 @@ class AuthManager:
                     doctor = response.data[0]
                     
                     # Check password
-                    stored_hash = doctor.get("password_hash", "")
+                    stored_hash = doctor.get("password_hash", "").strip()
+                    password_hash = password_hash.strip()
+                    
                     if stored_hash and stored_hash == password_hash:
                         # Generate token
                         token = self._generate_token()

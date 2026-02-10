@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     DocumentTextIcon,
@@ -23,6 +23,7 @@ import VoiceInput from '../components/VoiceInput';
 export default function SOAPEditor() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [activeTab, setActiveTab] = useState('conversation'); // conversation, upload, editor
     const [conversationMessages, setConversationMessages] = useState([]);
@@ -42,6 +43,33 @@ export default function SOAPEditor() {
     const [isValidating, setIsValidating] = useState(false);
     const [isFinalizing, setIsFinalizing] = useState(false);
     const [patientInfo, setPatientInfo] = useState(null);
+
+    // Load initial state from navigation context
+    useEffect(() => {
+        if (location.state) {
+            const { conversation, soap, patient } = location.state;
+
+            if (conversation) {
+                setConversationMessages(conversation.map(m => ({
+                    ...m,
+                    timestamp: m.timestamp || new Date()
+                })));
+            }
+
+            if (soap) {
+                setDraftSoap(soap);
+                setEditedSoap(soap);
+                setActiveTab('editor'); // Jump straight to editor if we already have a SOAP draft
+            }
+
+            if (patient) {
+                setPatientInfo(patient);
+            }
+
+            // Clear state from history so it doesn't re-trigger on refresh
+            window.history.replaceState({}, document.title);
+        }
+    }, [location]);
 
     // Handle conversation input
     const handleSendMessage = async () => {
@@ -217,6 +245,35 @@ export default function SOAPEditor() {
             }
         } catch (error) {
             toast.error('Failed to regenerate SOAP');
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Extract SOAP using TinyLlama API
+    const extractWithTinyLlama = async () => {
+        if (conversationMessages.length === 0) {
+            toast.error('No conversation to extract from');
+            return;
+        }
+
+        const conversationText = conversationMessages
+            .map(m => `${m.role === 'user' ? 'Doctor' : 'AI'}: ${m.content}`)
+            .join('\n');
+
+        setIsLoading(true);
+        try {
+            const response = await soapAPI.extractFromInterview(conversationText);
+            if (response.success && response.soap) {
+                setDraftSoap(response.soap);
+                setEditedSoap(response.soap);
+                toast.success('SOAP extracted using TinyLlama!');
+            } else {
+                toast.error(response.message || 'Extraction failed');
+            }
+        } catch (error) {
+            toast.error('Failed to call TinyLlama API');
             console.error(error);
         } finally {
             setIsLoading(false);
@@ -421,6 +478,14 @@ export default function SOAPEditor() {
                                 <p className="text-sm text-gray-600">Auto-generated from conversation</p>
                             </div>
                             <div className="flex gap-2">
+                                <button
+                                    onClick={extractWithTinyLlama}
+                                    disabled={isLoading || conversationMessages.length === 0}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    TinyLlama
+                                </button>
                                 <button
                                     onClick={regenerateSoap}
                                     disabled={isLoading || conversationMessages.length === 0}

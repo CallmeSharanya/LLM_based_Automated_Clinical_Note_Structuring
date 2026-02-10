@@ -11,6 +11,8 @@ import tempfile
 from typing import List, Dict, Any, Optional
 from ocr_utils import extract_text_from_bytes
 from utils import deidentify_text
+import requests
+from gradio_client import Client
 
 # Try to import Groq (primary LLM)
 try:
@@ -728,6 +730,84 @@ Return ONLY valid JSON."""
                 "message": "I've recorded your input. Please continue with more details.",
                 "draft_soap": None
             }
+
+    def extract_soap_from_tinyllama(self, conversation_text: str) -> Dict[str, Any]:
+        """
+        Extract SOAP note from conversation using external TinyLlama API (via Gradio Client)
+        """
+        SPACE_NAME = "Shreya5619/soap-tinyllama-api"
+        
+        try:
+            print(f"🚀 Calling TinyLlama HF Space: {SPACE_NAME}...")
+            # Use Gradio Client for more robust interaction with HF Spaces
+            client = Client(SPACE_NAME)
+            result = client.predict(conversation_text)
+            
+            # The result from this specific space is a string containing the SOAP note
+            soap_note = result
+            
+            if soap_note:
+                print(f"✅ Received response from TinyLlama")
+                # TinyLlama might return a raw string or a structured object.
+                # Usually these space-based APIs return a string if it's a simple extractor.
+                # If it's a string, we might need to parse it if we want structured JSON.
+                # However, your system expects a Dict with Subjective, Objective, Assessment, Plan.
+                
+                # Let's try to parse it if it looks like JSON, otherwise return as is
+                if isinstance(soap_note, str):
+                    try:
+                        # Try to find JSON in the string
+                        start = soap_note.find('{')
+                        end = soap_note.rfind('}') + 1
+                        if start >= 0 and end > start:
+                            json_str = soap_note[start:end]
+                            return json.loads(json_str)
+                    except:
+                        pass
+                    
+                    # If not JSON, we can try to split by section headers
+                    sections = {
+                        "Subjective": ["subjective", "s:"],
+                        "Objective": ["objective", "o:"],
+                        "Assessment": ["assessment", "a:"],
+                        "Plan": ["plan", "p:"]
+                    }
+                    structured = {}
+                    current_section = None
+                    lines = soap_note.split("\n")
+                    
+                    for line in lines:
+                        cleaned_line = line.strip().lower()
+                        found = False
+                        for s_name, variants in sections.items():
+                            for var in variants:
+                                if cleaned_line.startswith(var) or cleaned_line.startswith(f"**{var}**"):
+                                    current_section = s_name
+                                    structured[s_name] = line.split(":", 1)[1].strip() if ":" in line else ""
+                                    found = True
+                                    break
+                            if found: break
+                        
+                        if not found and current_section:
+                            structured[current_section] = structured.get(current_section, "") + "\n" + line
+                    
+                    if structured:
+                        return structured
+                    
+                    # If all else fails, return the raw note in Subjective or split it roughly
+                    return {
+                        "Subjective": soap_note,
+                        "Objective": "See Subjective",
+                        "Assessment": "See Subjective",
+                        "Plan": "See Subjective"
+                    }
+                
+                return soap_note
+            else:
+                return None
+        except Exception as e:
+            print(f"❌ Error calling TinyLlama API: {e}")
+            return None
 
 
 # Singleton instance

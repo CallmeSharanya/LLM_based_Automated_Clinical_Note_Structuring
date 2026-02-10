@@ -24,7 +24,15 @@ from utils import deidentify_text
 from llm_structurer import embed_with_gemini
 from icd_mapper import load_icd_codes, match_icd
 from icd_mapper import load_icd_codes, match_icd
-from db_utils import insert_note, fetch_similar_notes, get_all_notes, upsert_encounter
+from db_utils import (
+    insert_note, 
+    fetch_similar_notes, 
+    get_all_notes, 
+    upsert_encounter,
+    insert_clinical_note,
+    fetch_similar_clinical_notes,
+    get_clinical_notes_by_patient
+)
 
 # Import Supabase client for doctor/appointment operations
 from supabase_client import (
@@ -93,7 +101,7 @@ class ChatMessage(BaseModel):
 
 class DoctorMatchRequest(BaseModel):
     symptoms: List[str]
-    preliminary_soap: Optional[Dict[str, str]] = None
+    preliminary_soap: Optional[Dict[str, Any]] = None
     triage_priority: str = "green"
     preferred_language: Optional[str] = None
 
@@ -107,7 +115,7 @@ class EncounterUpdate(BaseModel):
     doctor_notes: Optional[str] = None
     vitals: Optional[Dict[str, Any]] = None
     examination: Optional[Dict[str, Any]] = None
-    edited_soap: Optional[Dict[str, str]] = None
+    edited_soap: Optional[Dict[str, Any]] = None
     diagnoses: Optional[List[str]] = None
 
 class ValidateSOAPRequest(BaseModel):
@@ -117,7 +125,7 @@ class ValidateSOAPRequest(BaseModel):
     specialty: Optional[str] = None
 
 class PatientSummaryRequest(BaseModel):
-    soap_note: Dict[str, str]
+    soap_note: Dict[str, Any]
     diagnoses: Optional[List[str]] = None
     medications: Optional[List[Dict]] = None
     follow_up_date: Optional[str] = None
@@ -287,19 +295,17 @@ async def list_intake_sessions():
 
 class UpdateSessionRequest(BaseModel):
     session_id: str
-    preliminary_soap: Optional[Dict[str, str]] = None
-    final_soap: Optional[Dict[str, str]] = None
+    preliminary_soap: Optional[Dict[str, Any]] = None
+    final_soap: Optional[Dict[str, Any]] = None
     doctor_notes: Optional[str] = None
 
 @app.post("/intake/update")
 async def update_intake_session(request: UpdateSessionRequest):
     """Update an intake session with edited SOAP notes"""
-    
     if request.session_id not in intake_agent.sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
     session = intake_agent.sessions[request.session_id]
-    
     # Update the session SOAP
     if request.preliminary_soap:
         session.preliminary_soap = request.preliminary_soap
@@ -454,6 +460,7 @@ async def create_appointment(request: BookAppointmentRequest):
     2. Update doctor's availability JSONB (remove booked slot)
     3. Increment doctor's current_load
     """
+    print("Booking appointment for patient", request)
     try:
         result = book_appointment(
             patient_id=request.patient_id,
@@ -526,7 +533,7 @@ class SaveDraftSOAPRequest(BaseModel):
     patient_id: str
     session_id: Optional[str] = None
     appointment_id: Optional[str] = None
-    draft_soap: Dict[str, str]
+    draft_soap: Dict[str, Any]
     source: str = "intake"  # "intake", "upload", "conversation"
     symptoms: Optional[List[str]] = None
     triage: Optional[Dict[str, Any]] = None
@@ -648,13 +655,15 @@ class FinalizeSoapRequest(BaseModel):
     draft_id: str
     patient_id: str
     doctor_id: str
-    final_soap: Dict[str, str]
+    final_soap: Dict[str, Any]
     diagnosis_codes: Optional[List[str]] = None
     notes: Optional[str] = None
+    specialty: Optional[str] = None
+    raw_text: Optional[str] = None
 
 @app.post("/soap/finalize")
 async def finalize_soap(request: FinalizeSoapRequest):
-    """Doctor finalizes a draft SOAP note"""
+    """Doctor finalizes a draft SOAP note and persists to clinical_notes table"""
     try:
         # Update the draft status
         patient_drafts = draft_soaps_store.get(request.patient_id, {})
@@ -669,34 +678,45 @@ async def finalize_soap(request: FinalizeSoapRequest):
         
         # Validate the final SOAP
         validation_result = None
+        validation_score = None
         try:
             validation_result = dual_validator.validate_soap(request.final_soap)
+            # Extract overall validation score if available
+            if validation_result and isinstance(validation_result, dict):
+                validation_score = validation_result.get("overall_score") or validation_result.get("score")
         except Exception as ve:
             print(f"Validation warning: {ve}")
         
-        return {
-            "success": True,
-            "message": "SOAP finalized successfully",
-            "validation": validation_result,
-            "finalized_at": datetime.now().isoformat()
-        }
+        db_result = {"success": False}
+        clinical_note_result = {"success": False}
+        encounter_id = None
         
         # Persist to database
         try:
             # 1. Prepare encounter data
             encounter_data = {
                 "patient_id": request.patient_id,
-                "doctor_id": request.doctor_id,
                 "final_soap": request.final_soap,
-                "icd_codes": request.diagnosis_codes or [],  # Store as JSONB/Array
+                "icd_codes": request.diagnosis_codes or [],
                 "doctor_notes": request.notes,
                 "encounter_status": "completed",
                 "completed_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
             
+            # Only add doctor_id if it's a valid UUID
+            if request.doctor_id:
+                try:
+                    uuid.UUID(str(request.doctor_id))
+                    encounter_data["doctor_id"] = request.doctor_id
+                except (ValueError, AttributeError):
+                    print(f"⚠️ Invalid doctor_id format: {request.doctor_id}, skipping")
+            
             # 2. Get session context if available
             draft_data = patient_drafts.get(request.draft_id, {})
+            specialty = request.specialty
+            raw_text = request.raw_text
+            
             if draft_data.get("session_id"):
                 encounter_data["intake_session_id"] = draft_data["session_id"]
                 
@@ -705,14 +725,85 @@ async def finalize_soap(request: FinalizeSoapRequest):
                 if session:
                     encounter_data["pre_visit_soap"] = session.preliminary_soap
                     encounter_data["validation_scores"] = validation_result
+                    # Get specialty from session if not provided
+                    if not specialty and session.suggested_specialties:
+                        specialty = session.suggested_specialties[0] if session.suggested_specialties else None
             
             # 3. Upsert to encounters table
             db_result = upsert_encounter(encounter_data)
             
             if db_result.get("success"):
                 print(f"✅ Encounter persisted for patient {request.patient_id}")
+                encounter_id = db_result.get("data", {}).get("id")
             else:
                 print(f"⚠️ Failed to persist encounter: {db_result.get('error')}")
+            
+            # 4. Insert into clinical_notes table
+            try:
+                # Extract SOAP components
+                soap = request.final_soap
+                subjective = soap.get("Subjective") or soap.get("subjective") or ""
+                objective = soap.get("Objective") or soap.get("objective") or ""
+                assessment = soap.get("Assessment") or soap.get("assessment") or ""
+                plan = soap.get("Plan") or soap.get("plan") or ""
+                
+                # Generate combined text for embedding
+                combined_soap_text = f"Subjective: {subjective}\nObjective: {objective}\nAssessment: {assessment}\nPlan: {plan}"
+                
+                # Generate embedding
+                embedding = None
+                try:
+                    embedding = embed_with_gemini(combined_soap_text)
+                except Exception as emb_err:
+                    print(f"⚠️ Error generating embedding: {emb_err}")
+                
+                # Prepare raw text - use provided or draft source
+                if not raw_text:
+                    raw_text = draft_data.get("symptoms", [])
+                    if isinstance(raw_text, list):
+                        raw_text = ", ".join(raw_text)
+                
+                # Match ICD codes if diagnosis_codes provided
+                icd_json = []
+                if request.diagnosis_codes:
+                    icd_json = [{"code": code, "description": ""} for code in request.diagnosis_codes]
+                else:
+                    # Try to match ICD codes from assessment
+                    try:
+                        if assessment and icd_codes:
+                            matched = match_icd(assessment, icd_codes, top_k=5)
+                            icd_json = matched
+                    except Exception as icd_err:
+                        print(f"⚠️ Error matching ICD codes: {icd_err}")
+                
+                # Prepare clinical note data
+                clinical_note_data = {
+                    "patient_id": request.patient_id,
+                    "raw_text": raw_text or combined_soap_text,
+                    "deidentified_text": deidentify_text(combined_soap_text) if combined_soap_text else None,
+                    "subjective": subjective,
+                    "objective": objective,
+                    "assessment": assessment,
+                    "plan": plan,
+                    "icd_json": icd_json,
+                    "embedding": embedding,
+                    "encounter_id": encounter_id,
+                    "validation_score": validation_score,
+                    "speciality": specialty
+                }
+                
+                # Insert into clinical_notes
+                clinical_note_result = insert_clinical_note(clinical_note_data)
+                
+                if clinical_note_result.get("success"):
+                    print(f"✅ Clinical note inserted for patient {request.patient_id}")
+                else:
+                    print(f"⚠️ Failed to insert clinical note: {clinical_note_result.get('error')}")
+                    
+            except Exception as cn_err:
+                print(f"⚠️ Clinical notes persistence error: {cn_err}")
+                traceback.print_exc()
+                clinical_note_result = {"success": False, "error": str(cn_err)}
                 
         except Exception as db_err:
             print(f"⚠️ Database persistence error: {db_err}")
@@ -724,12 +815,20 @@ async def finalize_soap(request: FinalizeSoapRequest):
             "validation": validation_result,
             "finalized_at": datetime.now().isoformat(),
             "db_persistence": {
-                "success": db_result.get("success"),
-                "error": db_result.get("error")
+                "encounter": {
+                    "success": db_result.get("success"),
+                    "error": db_result.get("error"),
+                    "encounter_id": encounter_id
+                },
+                "clinical_note": {
+                    "success": clinical_note_result.get("success"),
+                    "error": clinical_note_result.get("error")
+                }
             }
         }
     except Exception as e:
         print(f"Error finalizing SOAP: {e}")
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 @app.get("/soap/draft/{draft_id}")
@@ -929,7 +1028,7 @@ async def generate_patient_summary(request: PatientSummaryRequest):
 
 @app.post("/summary/sms")
 async def generate_sms_summary(
-    soap_note: Dict[str, str],
+    soap_note: Dict[str, Any],
     patient_name: str = "Patient"
 ):
     """Generate a brief SMS-friendly summary"""
@@ -1060,14 +1159,19 @@ async def export_learning_data():
 
 @app.post("/chat")
 async def chat(query: str = Form(...)):
-    """Answer clinical queries using RAG with similar notes"""
+    """Answer clinical queries using RAG with similar notes from clinical_notes table"""
     try:
         # Try to get embeddings and similar notes
         similar_notes = []
         try:
             query_emb = embed_with_gemini(query)
             if query_emb:
-                similar_notes = fetch_similar_notes(query_emb, top_k=3)
+                # First try clinical_notes table (primary source)
+                similar_notes = fetch_similar_clinical_notes(query_emb, top_k=3)
+                
+                # If no results, fallback to encounters table
+                if not similar_notes:
+                    similar_notes = fetch_similar_notes(query_emb, top_k=3)
         except Exception as emb_error:
             print(f"⚠️ Embedding failed, proceeding without context: {emb_error}")
         
@@ -1083,6 +1187,22 @@ async def chat(query: str = Form(...)):
         print("❌ Error in /chat:", e)
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/clinical-notes/patient/{patient_id}")
+async def get_patient_clinical_notes(patient_id: str):
+    """Get all clinical notes for a specific patient"""
+    try:
+        notes = get_clinical_notes_by_patient(patient_id)
+        return {
+            "success": True,
+            "patient_id": patient_id,
+            "notes": notes,
+            "count": len(notes)
+        }
+    except Exception as e:
+        print(f"Error fetching clinical notes for patient {patient_id}: {e}")
+        return {"success": False, "error": str(e), "notes": []}
 
 # ============================================================================
 # ANALYTICS ENDPOINTS
@@ -1123,6 +1243,32 @@ class ConversationRequest(BaseModel):
 
 class GenerateSOAPRequest(BaseModel):
     messages: List[Dict[str, Any]]
+
+class InterviewSOAPRequest(BaseModel):
+    conversation: str
+
+@app.post("/soap/extract-from-interview")
+async def extract_soap_from_interview(request: InterviewSOAPRequest):
+    """Extract SOAP from a raw conversation text using external API"""
+    try:
+        soap = multimodal_processor.extract_soap_from_tinyllama(request.conversation)
+        if soap:
+            return {
+                "success": True,
+                "soap": soap
+            }
+        else:
+            # Fallback to standard processor if external API fails
+            messages = [{"role": "user", "content": request.conversation}]
+            result = multimodal_processor.process_conversation_to_soap(messages)
+            return {
+                "success": True,
+                "soap": result.get("draft_soap"),
+                "message": "Used fallback processor as external API was unavailable."
+            }
+    except Exception as e:
+        print(f"❌ Interview extraction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/multimodal/process")
 async def process_multimodal(
@@ -1473,7 +1619,7 @@ async def finalize_encounter(
     generate_summary: bool = Form(True),
     patient_id: Optional[str] = Form(None)
 ):
-    """Finalize an encounter and save to Supabase"""
+    """Finalize an encounter and save to both encounters and clinical_notes tables"""
     print(f"📝 Finalizing encounter {encounter_id} for patient {patient_id}")
     try:
         # Parse SOAP note if it's a string
@@ -1485,40 +1631,46 @@ async def finalize_encounter(
         # Get Supabase client
         supabase = get_supabase_client()
         
+        # Extract SOAP components
+        subjective = ""
+        objective = ""
+        assessment = ""
+        plan = ""
+        
+        if isinstance(soap_data, dict):
+            subjective = soap_data.get("Subjective") or soap_data.get("subjective") or ""
+            objective = soap_data.get("Objective") or soap_data.get("objective") or ""
+            assessment = soap_data.get("Assessment") or soap_data.get("assessment") or ""
+            plan = soap_data.get("Plan") or soap_data.get("plan") or ""
+        
         # Calculate ICD codes from Assessment
         icd_matches = []
         try:
-            assessment_text = ""
-            if isinstance(soap_data, dict):
-                assessment_text = soap_data.get("Assessment", "") or soap_data.get("assessment", "")
-            
-            if assessment_text and len(assessment_text) > 5:
-                print(f"DEBUG: Found Assessment text: {assessment_text[:100]}...")
-                # Load codes if not already loaded (normally loaded at startup)
+            if assessment and len(assessment) > 5:
+                print(f"DEBUG: Found Assessment text: {assessment[:100]}...")
                 from icd_mapper import load_icd_codes, match_icd
-                icd_codes = load_icd_codes()
-                print(f"DEBUG: Loaded {len(icd_codes)} ICD codes from CSV")
-                icd_matches = match_icd(assessment_text, icd_codes)
+                icd_codes_list = load_icd_codes()
+                print(f"DEBUG: Loaded {len(icd_codes_list)} ICD codes from CSV")
+                icd_matches = match_icd(assessment, icd_codes_list)
                 print(f"✅ Generated {len(icd_matches)} ICD codes for encounter: {json.dumps(icd_matches)}")
             else:
-                print(f"DEBUG: Assessment text missing or too short. Keys: {soap_data.keys() if isinstance(soap_data, dict) else 'Not Dict'}")
+                print(f"DEBUG: Assessment text missing or too short.")
         except Exception as icd_err:
             print(f"⚠️ Failed to generate ICD codes during finalize: {icd_err}")
-
-        # 1. Update/Insert into encounters table
-        encounter_data = {
-            "id": encounter_id if encounter_id != "new" else None,
-            "final_soap": soap_data,
-            "icd_json": icd_matches, # Save ICD codes!
-            "encounter_status": "completed",
-            "completed_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
         
+        # Generate embedding for clinical notes
+        combined_soap_text = f"Subjective: {subjective}\nObjective: {objective}\nAssessment: {assessment}\nPlan: {plan}"
+        embedding = None
+        try:
+            embedding = embed_with_gemini(combined_soap_text)
+            print(f"✅ Generated embedding with {len(embedding) if embedding else 0} dimensions")
+        except Exception as emb_err:
+            print(f"⚠️ Error generating embedding: {emb_err}")
+
         # Check if encounter_id is a valid UUID
         is_uuid = False
+        saved_encounter_id = None
         try:
-            import uuid
             uuid.UUID(encounter_id)
             is_uuid = True
         except:
@@ -1526,12 +1678,12 @@ async def finalize_encounter(
             
         if not is_uuid:
             if patient_id:
-                 # Create NEW encounter via Supabase
+                # Create NEW encounter via Supabase
                 print(f"✨ Creating new encounter for patient {patient_id}")
                 new_encounter = {
                     "patient_id": patient_id,
                     "final_soap": soap_data,
-                    "icd_json": icd_matches, # Save ICD codes!
+                    "icd_codes": icd_matches,
                     "encounter_status": "completed",
                     "completed_at": datetime.now().isoformat(),
                     "updated_at": datetime.now().isoformat(),
@@ -1540,44 +1692,78 @@ async def finalize_encounter(
                 try:
                     response = supabase.table("encounters").insert(new_encounter).execute()
                     if response.data:
-                        print(f"✅ Encounter saved to DB: {response.data[0]['id']}")
-                        return {
-                            "success": True,
-                            "message": "Encounter saved to Database",
-                            "data": response.data[0]
-                        }
+                        saved_encounter_id = response.data[0]['id']
+                        print(f"✅ Encounter saved to DB: {saved_encounter_id}")
                 except Exception as insert_err:
-                    print(f"❌ DB Insert failed: {insert_err}")
-                    # Fallback to local store as previously implemented...
+                    print(f"❌ Encounter DB Insert failed: {insert_err}")
+                    traceback.print_exc()
             
-            # Temporary fallback logic remains same...
-            draft_soaps_store[encounter_id] = {
+            if not saved_encounter_id:
+                # Temporary fallback to local store
+                draft_soaps_store[encounter_id] = {
+                    "final_soap": soap_data,
+                    "status": "completed",
+                    "patient_id": patient_id,
+                    "saved_at": datetime.now().isoformat()
+                }
+        else:
+            # Update existing encounter
+            encounter_data = {
                 "final_soap": soap_data,
-                "status": "completed",
-                "patient_id": patient_id,
-                "saved_at": datetime.now().isoformat()
+                "icd_codes": icd_matches,
+                "encounter_status": "completed",
+                "completed_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
             }
             
-            return {
-                "success": True,
-                "message": "Encounter saved (Local Store)",
-                "encounter_id": encounter_id
-            }
+            try:
+                response = supabase.table("encounters").update(encounter_data).eq("id", encounter_id).execute()
+                if response.data:
+                    saved_encounter_id = response.data[0]['id']
+                    print(f"✅ Encounter updated: {saved_encounter_id}")
+                else:
+                    print("⚠️ Encounter not found for update.")
+            except Exception as update_err:
+                print(f"❌ Encounter update failed: {update_err}")
+                traceback.print_exc()
 
-        # Update existing
-        response = supabase.table("encounters").update(encounter_data).eq("id", encounter_id).execute()
-        
-        if not response.data:
-            print("⚠️ Encounter not found for update.")
-            return {
-                "success": False, 
-                "error": "Encounter not found"
+        # Insert into clinical_notes table
+        clinical_note_result = {"success": False}
+        try:
+            clinical_note_data = {
+                "patient_id": patient_id,
+                "raw_text": combined_soap_text,
+                "deidentified_text": deidentify_text(combined_soap_text) if combined_soap_text else None,
+                "subjective": subjective,
+                "objective": objective,
+                "assessment": assessment,
+                "plan": plan,
+                "icd_json": icd_matches,
+                "embedding": embedding,
+                "encounter_id": saved_encounter_id,
+                "validation_score": None,
+                "speciality": None
             }
+            
+            clinical_note_result = insert_clinical_note(clinical_note_data)
+            
+            if clinical_note_result.get("success"):
+                print(f"✅ Clinical note inserted for patient {patient_id}")
+            else:
+                print(f"⚠️ Failed to insert clinical note: {clinical_note_result.get('error')}")
+        except Exception as cn_err:
+            print(f"⚠️ Clinical notes persistence error: {cn_err}")
+            traceback.print_exc()
             
         return {
-            "success": True, 
-            "message": "Encounter finalized",
-            "data": response.data[0]
+            "success": True,
+            "message": "Encounter finalized and saved to database",
+            "encounter_id": saved_encounter_id or encounter_id,
+            "clinical_note": {
+                "success": clinical_note_result.get("success"),
+                "error": clinical_note_result.get("error")
+            },
+            "icd_codes": icd_matches
         }
 
     except Exception as e:

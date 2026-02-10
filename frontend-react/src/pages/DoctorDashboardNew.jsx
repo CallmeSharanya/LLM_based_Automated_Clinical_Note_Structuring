@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI, soapAPI } from '../services/api';
+import { encounterAPI, analyticsAPI, chatAPI, appointmentAPI, soapAPI, intakeAPI } from '../services/api';
 
 export default function DoctorDashboardNew() {
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('appointments');
     const [appointments, setAppointments] = useState([]);
     const [pendingSOAPs, setPendingSOAPs] = useState([]);
@@ -12,6 +14,9 @@ export default function DoctorDashboardNew() {
     const [selectedSOAP, setSelectedSOAP] = useState(null);
     const [editingSOAP, setEditingSOAP] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [consultationSession, setConsultationSession] = useState(null);
+    const [fetchingSession, setFetchingSession] = useState(false);
+    const [isTinyLlamaLoading, setIsTinyLlamaLoading] = useState(false);
 
     // Chat state
     const [chatQuery, setChatQuery] = useState('');
@@ -72,6 +77,7 @@ export default function DoctorDashboardNew() {
                     status: apt.status || 'scheduled',
                     chief_complaint: apt.specialty || 'General Consultation',
                     triage_priority: 'green',
+                    session_id: apt.session_id,
                 }));
 
                 setAppointments(formattedAppointments);
@@ -159,6 +165,36 @@ export default function DoctorDashboardNew() {
         });
     };
 
+    const extractSoapFromTinyLlama = async (session) => {
+        if (!session?.conversation_history) {
+            alert('No conversation history available');
+            return;
+        }
+
+        const conversationText = session.conversation_history
+            .map(m => `${m.role === 'user' ? 'Patient' : 'AI'}: ${m.content}`)
+            .join('\n');
+
+        setIsTinyLlamaLoading(true);
+        try {
+            const response = await soapAPI.extractFromInterview(conversationText);
+            if (response.success && response.soap) {
+                setConsultationSession(prev => ({
+                    ...prev,
+                    preliminary_soap: response.soap
+                }));
+                alert('SOAP extracted using TinyLlama!');
+            } else {
+                alert(response.message || 'Extraction failed');
+            }
+        } catch (error) {
+            alert('Failed to call TinyLlama API');
+            console.error(error);
+        } finally {
+            setIsTinyLlamaLoading(false);
+        }
+    };
+
     const handleSaveSOAP = async () => {
         if (!selectedSOAP || !editingSOAP) return;
 
@@ -184,6 +220,31 @@ export default function DoctorDashboardNew() {
             alert('Failed to save SOAP');
         } finally {
             setSaving(false);
+        }
+    };
+    const handleStartConsultation = async (apt) => {
+        if (!apt.session_id) {
+            alert('No intake session found for this appointment.');
+            return;
+        }
+
+        setFetchingSession(true);
+        try {
+            const response = await intakeAPI.getSession(apt.session_id);
+            if (response) {
+                setConsultationSession(response);
+                if (response.preliminary_soap) {
+                    setSelectedAppointment(prev => ({
+                        ...prev,
+                        preliminary_soap: response.preliminary_soap
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error('Error loading session:', error);
+            alert('Could not load patient intake conversation.');
+        } finally {
+            setFetchingSession(false);
         }
     };
 
@@ -342,8 +403,16 @@ export default function DoctorDashboardNew() {
                                             </div>
                                         )}
 
-                                        <button className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                                            Start Consultation
+                                        <button
+                                            onClick={() => handleStartConsultation(selectedAppointment)}
+                                            disabled={fetchingSession}
+                                            className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {fetchingSession ? (
+                                                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                            ) : (
+                                                '🚀 Start Consultation'
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -645,6 +714,162 @@ export default function DoctorDashboardNew() {
                                         <p className="text-sm text-gray-700">{icd.desc}</p>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* Consultation Modal */}
+                {consultationSession && (
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                        <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-300">
+                            {/* Modal Header */}
+                            <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-xl">
+                                        🏥
+                                    </div>
+                                    <div>
+                                        <h2 className="font-bold text-gray-900">Patient Consultation: {selectedAppointment?.patient_name}</h2>
+                                        <p className="text-xs text-gray-500">Intake Session ID: {consultationSession.session_id}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setConsultationSession(null)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Modal Content */}
+                            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+                                {/* Left: Conversation Transcript */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4 border-b lg:border-b-0 lg:border-r border-gray-100">
+                                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        💬 Intake Conversation
+                                    </h3>
+                                    {consultationSession.conversation_history && consultationSession.conversation_history.length > 0 ? (
+                                        consultationSession.conversation_history.map((msg, idx) => (
+                                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
+                                                    ? 'bg-blue-600 text-white rounded-br-none'
+                                                    : 'bg-gray-100 text-gray-900 rounded-bl-none'
+                                                    }`}>
+                                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                    <span className={`text-[10px] mt-1 block ${msg.role === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                        {msg.role === 'user' ? 'Patient' : 'AI Assistant'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-center py-10 text-gray-500 italic">No transcript available for this session.</p>
+                                    )}
+                                </div>
+
+                                {/* Right: Preliminary Findings */}
+                                <div className="w-full lg:w-96 overflow-y-auto p-6 bg-gray-50/50">
+                                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        📋 Preliminary Assessment
+                                    </h3>
+
+                                    {/* Triage Info */}
+                                    {consultationSession.triage_priority && (
+                                        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs font-medium text-gray-500">Triage Priority</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${consultationSession.triage_priority === 'red' ? 'bg-red-100 text-red-700' :
+                                                    consultationSession.triage_priority === 'orange' ? 'bg-orange-100 text-orange-700' :
+                                                        'bg-green-100 text-green-700'
+                                                    }`}>
+                                                    {consultationSession.triage_priority}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-gray-500">Score: {consultationSession.triage_score}/10</p>
+                                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${consultationSession.triage_priority === 'red' ? 'bg-red-500' : 'bg-green-500'}`}
+                                                        style={{ width: `${(consultationSession.triage_score || 5) * 10}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* SOAP Draft */}
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase">AI-Generated SOAP Draft</h4>
+                                            <button
+                                                onClick={() => extractSoapFromTinyLlama(consultationSession)}
+                                                disabled={isTinyLlamaLoading}
+                                                className="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                            >
+                                                {isTinyLlamaLoading ? '⌛ Processing...' : '✨ Use TinyLlama'}
+                                            </button>
+                                        </div>
+                                        {consultationSession.preliminary_soap ? (
+                                            Object.entries(consultationSession.preliminary_soap).map(([key, value]) => (
+                                                <div key={key} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+                                                    <p className="text-xs font-bold text-gray-400 uppercase mb-1">{key}</p>
+                                                    <p className="text-sm text-gray-700">{value}</p>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-sm text-gray-500 italic text-center py-4 bg-white rounded-xl border border-dashed border-gray-300">
+                                                No SOAP draft generated yet.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Suggested Specialties */}
+                                    {consultationSession.suggested_specialties?.length > 0 && (
+                                        <div className="mt-6">
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 text-center">Suggested Specialties</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {consultationSession.suggested_specialties.map((spec, i) => (
+                                                    <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">
+                                                        {spec}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="p-4 border-t border-gray-100 bg-white flex justify-end gap-3">
+                                <button
+                                    onClick={() => setConsultationSession(null)}
+                                    className="px-6 py-2 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        // Package context to pass to SOAP Editor
+                                        const context = {
+                                            conversation: consultationSession.conversation_history || [],
+                                            soap: consultationSession.preliminary_soap || null,
+                                            patient: {
+                                                id: selectedAppointment?.patient_id || consultationSession?.patient_id,
+                                                name: selectedAppointment?.patient_name,
+                                                age: selectedAppointment?.patient_age,
+                                                gender: selectedAppointment?.patient_gender,
+                                                session_id: consultationSession?.session_id
+                                            }
+                                        };
+
+                                        // Navigate to SOAP Editor with state
+                                        navigate('/doctor/soap-editor', { state: context });
+                                        setConsultationSession(null);
+                                    }}
+                                    className="px-6 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-bold shadow-lg shadow-green-500/20"
+                                >
+                                    Finalize in SOAP Editor
+                                </button>
                             </div>
                         </div>
                     </div>
