@@ -452,6 +452,7 @@ async def create_appointment(request: BookAppointmentRequest):
     2. Update doctor's availability JSONB (remove booked slot)
     3. Increment doctor's current_load
     """
+    print("Booking appointment for patient", request)
     try:
         result = book_appointment(
             patient_id=request.patient_id,
