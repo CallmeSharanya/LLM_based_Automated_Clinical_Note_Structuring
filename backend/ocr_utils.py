@@ -10,7 +10,7 @@ if os.name == 'nt':  # Windows
     tesseract_paths = [
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        r"C:\Users\sampa\AppData\Local\Tesseract-OCR\tesseract.exe",
+        
     ]
     for path in tesseract_paths:
         if os.path.exists(path):
